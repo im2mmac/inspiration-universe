@@ -1111,7 +1111,17 @@ async function startCamera() {
       ? "카메라 준비 완료. 앞에 서면 우주인이 나타나요. (V: 카메라 미리보기)"
       : "손 모델을 불러오지 못해, 그물을 영감 위에 잠시 머무르면 낚이도록 바꿨어요.");
   } catch (error) {
-    status(error.name === "NotAllowedError" ? "카메라 권한을 허용하거나 화면을 눌러 마우스로 참여하세요." : "카메라를 켤 수 없어요. 화면을 눌러 마우스로 참여하세요.");
+    // 원인별로 다르게 알려 준다. 화면을 누르면 마우스로 참여할 수 있다.
+    const reasons = {
+      NotAllowedError: "카메라 권한이 막혀 있어요. 주소창 왼쪽에서 카메라를 허용하거나, 윈도우 설정 → 개인 정보 → 카메라를 켜 주세요.",
+      NotFoundError: "연결된 웹캠을 찾지 못했어요. 웹캠 연결을 확인해 주세요.",
+      NotReadableError: "다른 프로그램(줌, OBS, 카메라 앱 등)이 웹캠을 쓰고 있거나 윈도우가 막고 있어요. 그 프로그램을 닫아 주세요.",
+      OverconstrainedError: "웹캠이 요청한 화면 크기를 지원하지 않아요.",
+      ModelLoadError: "웹캠은 켜졌지만 손 인식 모델을 못 받았어요. 인터넷 연결을 확인하거나 vendor/models 파일을 받아 두세요.",
+      SecurityError: "이 주소에서는 카메라를 쓸 수 없어요. https 주소나 127.0.0.1 로 열어 주세요.",
+    };
+    status((reasons[error.name] || "카메라를 켤 수 없어요 (" + error.name + ": " + error.message + ").") + " 화면을 눌러 마우스로도 참여할 수 있어요.");
+    console.error("[영감의 우주] 카메라 오류", error);
   } finally { button.disabled = false; }
 }
 byId("save").addEventListener("click", async () => {

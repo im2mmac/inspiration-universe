@@ -45,7 +45,11 @@ export class WristCamera {
   }
 
   async start() {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("카메라는 HTTPS 또는 이 PC의 로컬 주소에서 켤 수 있어요.");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      const error = new Error("카메라는 HTTPS 또는 이 PC의 로컬 주소에서 켤 수 있어요.");
+      error.name = "SecurityError";
+      throw error;
+    }
     if (this.stream) return;
     this.stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
@@ -54,7 +58,13 @@ export class WristCamera {
     this.video.srcObject = this.stream;
     try {
       await this.video.play();
-      if (!this.poseModel) await this.load();
+      if (!this.poseModel) {
+        try { await this.load(); } catch (error) {
+          const wrapped = new Error("인식 모델을 불러오지 못했어요: " + (error?.message || error));
+          wrapped.name = "ModelLoadError";
+          throw wrapped;
+        }
+      }
       this.lastFrame = -1;
       this.lastTime = 0;
       this.frame = requestAnimationFrame(time => this.scan(time));
