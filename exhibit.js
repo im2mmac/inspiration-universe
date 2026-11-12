@@ -519,9 +519,7 @@ function fly(floater, slot, player) {
 }
 
 function nextBeat() {
-  const now = performance.now();
-  if (audio.beat()) return now + audio.nextJoinDelay() * 1000;
-  return beatOrigin + Math.ceil((now - beatOrigin) / BEAT_MS) * BEAT_MS;
+  return performance.now() + audio.nextJoinDelay() * 1000;
 }
 
 function drawLayers() {

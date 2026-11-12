@@ -21,7 +21,7 @@
 
 - 영감은 화면 중앙의 소실점에서 별빛 한 점으로 나타나 원근감 있게 커진다. 한국어 단어는 반짝임·회전·물결·눕혀서 일어서기 중 하나로, 외국어 단어는 Y축으로 돌며 원어와 한국어 뜻이 번갈아 보인다. 3D 이미지는 흔들리며 다가온다. 낚을 거리가 되면 움직임이 잦아들고 금빛 고리가 생긴다.
 - 재료 목록과 음악 역할(base·melody·texture)은 `items.js`에 있다. 화면 스타일은 `exhibit.css`, 사운드 체크 페이지 스타일은 `site.css`.
-- `inspiration-audio.js`에서 영감별 타격음과 리듬을 정한다. 각 영감은 낚을 때 고유한 효과음으로 먼저 들리고, 다음 박부터 반복되는 레이어로 합류한다. 로컬 수노 WAV가 있으면 선택한 곡의 타악기 스템 하나가 작은 음량으로 바탕에 깔린다.
+- `inspiration-audio.js`에서 영감별 음색과 리듬을 정한다. 첫 낚기에 일정한 카혼 박과 멜로디가 시작되고, 한 마디 뒤 첫 영감의 리듬이 합류한다. 이후 영감은 다음 박부터 얹히며 각 파트의 약박에는 약한 스윙이 있다. 로컬 수노 WAV가 있으면 고른 곡의 멜로디를 쓰고, 공개 버전은 하프 멜로디를 쓴다.
 
 ## 전시 운영
 
@@ -57,3 +57,5 @@ NASA, ESA, CSA, STScI. [Cosmic Cliffs](https://science.nasa.gov/asset/webb/cosmi
 ## 소리 자료
 
 액션 효과음은 낚기, 레이어 합류, 놓아주기 각 5종이다. 사운드 체크에서 선택하면 같은 브라우저의 체험판에 적용된다. 우주인 캐릭터와 3D 이미지는 팀 뮤직스케이프 제작 이미지에서 잘라 쓴다. 체험판의 하프 실녹음은 Versilian Studios의 [VSCO 2 Community Edition](https://versilian-studios.com/vsco-community/)에서 가져왔다. CC0 라이선스.
+
+카혼, 클라베스, 셰이커는 [Versilian Community Sample Library](https://github.com/sgossner/VCSL)의 녹음을 썼다. 물방울은 vfrattaroli의 [eau qui coule](https://freesound.org/people/vfrattaroli/sounds/843505/), 바람과 나뭇잎은 TimOut789의 [WindyLeaves](https://freesound.org/people/TimOut789/sounds/751869/)에서 짧게 잘랐다. 모두 CC0.

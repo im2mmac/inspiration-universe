@@ -4,6 +4,7 @@ import { SunoLoops, loadSunoPack, selectedSunoPack, sunoBpm, sunoCatalog, sunoLo
 
 const beatLength = 60 / sunoBpm;
 const stepLength = beatLength / 4;
+const introSteps = 16;
 const masterLevel = .82;
 
 function mixBus(context, level = masterLevel) {
@@ -29,18 +30,15 @@ export class UniverseAudio {
     this.entries = [];
     this.queue = [];
     this.muted = false;
+    this.origin = null;
   }
 
   async start() {
     if (!this.context) this.initialize();
     await Promise.all([this.context.resume(), this.ready]);
     if (this.timer || this.closed) return;
-    this.origin = this.context.currentTime + .09;
-    this.next = this.origin;
-    this.index = 0;
-    this.bed?.start(this.origin);
-    this.schedule();
     this.timer = setInterval(() => this.schedule(), 23);
+    this.schedule();
   }
 
   initialize() {
@@ -62,24 +60,38 @@ export class UniverseAudio {
   }
 
   async prepareBed() {
+    const [beat, melody] = await Promise.all([
+      decoded(this.context, new URL("./assets/audio/foundation-beat.wav", import.meta.url)),
+      this.prepareMelody(),
+    ]);
+    this.bed = new SunoLoops(this.context, this.bus.input, [
+      { id: "foundation-beat", buffer: beat, bed: .52 },
+      melody,
+    ]);
+  }
+
+  async prepareMelody() {
     const pack = selectedSunoPack(await sunoCatalog());
-    const base = pack?.tracks.find(track => track.role === "base");
-    if (!base) return;
-    try {
-      const tracks = await loadSunoPack(this.context, { ...pack, tracks: [{ ...base, bed: .24 }] });
-      this.bed = new SunoLoops(this.context, this.bus.input, tracks);
-    } catch {}
+    const melody = pack?.tracks.find(track => track.role === "melody");
+    if (melody) {
+      try {
+        const [track] = await loadSunoPack(this.context, { ...pack, tracks: [{ ...melody, bed: .68 }] });
+        return track;
+      } catch {}
+    }
+    const buffer = await decoded(this.context, new URL("./assets/audio/foundation-melody.wav", import.meta.url));
+    return { id: "foundation-melody", buffer, bed: .68 };
   }
 
   beat() {
-    if (!this.origin) return null;
+    if (this.origin === null) return null;
     const beats = Math.max(0, (this.context.currentTime - this.origin) / beatLength);
     return { phase: beats % 1 };
   }
 
   nextJoinDelay() {
-    if (!this.origin) return 0;
-    const position = Math.max(this.index, (this.context.currentTime - this.origin) / stepLength);
+    if (this.origin === null) return introSteps * stepLength;
+    const position = Math.max(introSteps, this.index, (this.context.currentTime - this.origin) / stepLength);
     const at = this.origin + Math.ceil(position / 4) * beatLength;
     return Math.max(0, at - this.context.currentTime);
   }
@@ -90,7 +102,7 @@ export class UniverseAudio {
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     source.buffer = buffer;
-    gain.gain.value = kind === "layer" ? .09 : .16;
+    gain.gain.value = kind === "layer" ? .05 : .08;
     source.connect(gain).connect(this.bus.input);
     source.start(at);
     source.onended = () => { source.disconnect(); gain.disconnect(); };
@@ -105,6 +117,7 @@ export class UniverseAudio {
       }
     });
     this.queue.push({ type: "add", item });
+    if (this.timer && this.origin === null) this.schedule();
   }
 
   release(item) {
@@ -116,6 +129,8 @@ export class UniverseAudio {
   clear() {
     this.entries = [];
     this.queue = [];
+    this.bed?.stop();
+    this.origin = null;
     this.layers?.sync([], this.context.currentTime);
   }
 
@@ -128,12 +143,19 @@ export class UniverseAudio {
   schedule() {
     const context = this.context;
     if (context.state !== "running") return;
+    if (this.origin === null) {
+      if (!this.queue.some(change => change.type === "add")) return;
+      this.origin = context.currentTime + .035;
+      this.next = this.origin;
+      this.index = 0;
+      this.bed?.start(this.origin);
+    }
     if (this.next < context.currentTime) {
       this.index = Math.ceil((context.currentTime - this.origin) / stepLength);
       this.next = this.origin + this.index * stepLength;
     }
     while (this.next < context.currentTime + .09) {
-      if (this.index % 4 === 0 && this.queue.length) {
+      if (this.index >= introSteps && this.index % 4 === 0 && this.queue.length) {
         const previous = this.entries;
         const next = new Map(previous.map(item => [item.id, item]));
         for (const { type, item } of this.queue) {
@@ -178,7 +200,7 @@ export class UniverseAudio {
     if (this.bed) new SunoLoops(context, bus.input, this.bed.tracks).start(0);
     const layers = new InspirationLayers(context, bus.input, this.layers.buffers);
     layers.sync(items, 0);
-    for (let step = 0; step < 128; step += 1) layers.schedule(step, step * stepLength);
+    for (let step = introSteps; step < 128; step += 1) layers.schedule(step, step * stepLength);
     bus.output.gain.setValueAtTime(.92, sunoLoopSeconds - .012);
     bus.output.gain.linearRampToValueAtTime(0, sunoLoopSeconds);
     return toWav(await context.startRendering());
