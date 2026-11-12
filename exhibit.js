@@ -88,7 +88,7 @@ function hint(message) {
 
 function resize() {
   const rect = stage.getBoundingClientRect();
-  const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  const dpr = stage.classList.contains("lite") ? 1 : Math.min(1.5, window.devicePixelRatio || 1);
   size = { w: rect.width, h: rect.height, dpr };
   for (const canvas of [fx, starsCanvas]) {
     canvas.width = Math.round(rect.width * dpr);
@@ -804,7 +804,9 @@ function interact(time) {
       net.ty = .5;
       net.closed = false;
     }
-    const follow = cameraActive ? .32 : .55;
+    // 크게 움직일수록 빨리 따라붙고, 거의 멈춰 있을 때만 떨림을 걸러 낸다 (지연 감소).
+    const gap = Math.hypot(net.tx - net.x, (net.ty - net.y) * .56);
+    const follow = cameraActive ? clamp(.45 + gap * 9, .45, .9) : .6;
     net.x = lerp(net.x, net.tx, follow);
     net.y = lerp(net.y, net.ty, follow);
     net.swish = Math.max(0, net.swish - .045);
@@ -951,9 +953,28 @@ function beatTick(time) {
 }
 
 let lastTime = performance.now();
+// 화면이 버거우면(초당 45프레임 아래가 2초 이상) 자동으로 가벼운 모드로 바꾼다.
+let frameAvg = 16.7;
+let slowSince = 0;
+function watchPerformance(time, raw) {
+  frameAvg = frameAvg * .95 + raw * .05;
+  if (!stage.classList.contains("lite")) {
+    if (frameAvg > 22) { slowSince ||= time; if (time - slowSince > 2000) { stage.classList.add("lite"); stars.length = 110; resize(); } }
+    else slowSince = 0;
+  }
+  const panel = byId("perf");
+  if (panel && !panel.hidden) {
+    const cam = tracker.stats || {};
+    panel.textContent = "화면 " + Math.round(1000 / frameAvg) + "fps" + (stage.classList.contains("lite") ? " (가벼운 모드)" : "") +
+      " · 카메라 " + Math.round(cam.fps || 0) + "fps · 인식 " + Math.round(cam.detectMs || 0) + "ms · " + (cam.delegate || "-");
+  }
+}
+
 function frame(time) {
-  const dt = Math.min(50, time - lastTime);
+  const raw = time - lastTime;
+  const dt = Math.min(50, raw);
   lastTime = time;
+  watchPerformance(time, Math.min(200, raw));
   const limit = state === "idle" ? 7 : state === "active" ? 6 : 0;
   const live = onScreen.filter(f => !f.leaving).length;
   if (live < limit && time - lastSpawn > 650) {
@@ -1063,6 +1084,8 @@ window.addEventListener("pointerup", () => { if (!cameraActive) nets[selectedPla
 document.addEventListener("keydown", event => {
   if (["1", "2", "3"].includes(event.key) && !event.repeat) selectPlayer(Number(event.key) - 1);
   if (event.key === "v" || event.key === "V") stage.classList.toggle("show-camera");
+  if (event.key === "f" || event.key === "F") byId("perf").hidden = !byId("perf").hidden;
+  if (event.key === "l" || event.key === "L") { stage.classList.toggle("lite"); resize(); }
   if (event.key === " " && state === "active" && !cameraActive) {
     event.preventDefault();
     const net = nets[selectedPlayer];

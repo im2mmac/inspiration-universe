@@ -42,6 +42,10 @@ export class WristCamera {
     this.tracks = Array(3).fill(null);
     this.closed = Array(3).fill(false);
     this.mode = "pose";
+    // 지연 점검용 수치 (키보드 F로 화면에 표시)
+    this.stats = { delegate: "-", detectMs: 0, fps: 0 };
+    this.frameCount = 0;
+    this.lastPoses = [];
   }
 
   async start() {
@@ -52,7 +56,7 @@ export class WristCamera {
     }
     if (this.stream) return;
     this.stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 }, facingMode: "user" },
       audio: false,
     });
     this.video.srcObject = this.stream;
@@ -82,7 +86,9 @@ export class WristCamera {
     const make = async (Task, url, extra) => {
       for (const delegate of ["GPU", "CPU"]) {
         try {
-          return await Task.createFromOptions(files, { baseOptions: { modelAssetPath: url, delegate }, runningMode: "VIDEO", ...extra });
+          const task = await Task.createFromOptions(files, { baseOptions: { modelAssetPath: url, delegate }, runningMode: "VIDEO", ...extra });
+          this.stats.delegate = this.stats.delegate === "CPU" ? "CPU" : delegate;
+          return task;
         } catch (error) { if (delegate === "CPU") throw error; }
       }
     };
@@ -106,13 +112,21 @@ export class WristCamera {
 
   scan(time) {
     if (!this.stream) return;
-    if (time - this.lastTime >= 40 && this.video.readyState >= 2 && this.video.currentTime !== this.lastFrame) {
+    // 새 카메라 프레임마다 손을 읽는다. 몸 위치는 천천히 변하니 두 프레임에 한 번만 읽어 계산을 줄인다.
+    if (this.video.readyState >= 2 && this.video.currentTime !== this.lastFrame) {
+      const gap = time - this.lastTime;
       this.lastTime = time;
       this.lastFrame = this.video.currentTime;
       try {
-        const { landmarks } = this.poseModel.detectForVideo(this.video, time);
+        const started = performance.now();
+        const everyPose = !this.handModel || this.frameCount % 2 === 0 || !this.lastPoses.length;
+        if (everyPose) this.lastPoses = this.poseModel.detectForVideo(this.video, time).landmarks;
         const hands = this.handModel ? this.handModel.detectForVideo(this.video, time).landmarks : [];
-        this.onPoses(this.match(landmarks, hands, time));
+        this.frameCount += 1;
+        const spent = performance.now() - started;
+        this.stats.detectMs = this.stats.detectMs * .85 + spent * .15;
+        if (gap > 0) this.stats.fps = this.stats.fps * .85 + (1000 / gap) * .15;
+        this.onPoses(this.match(this.lastPoses, hands, time));
       } catch (error) {
         this.stop();
         this.onPoses(null, error);
