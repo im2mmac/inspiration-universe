@@ -161,10 +161,9 @@ function thumbnail(item) {
    휴대폰에서 song.html이 같은 목록으로 음악을 다시 만들어 내려받게 한다 (서버 업로드 없음). */
 const PUBLIC_SITE = "https://im2mmac.github.io/inspiration-universe/";
 function shareUrl() {
-  const local = /^(localhost|127\.|\[::1\]|$)/.test(location.hostname) || location.protocol === "file:";
-  const base = new URL("./song.html", local ? PUBLIC_SITE : location.href);
+  const base = new URL("./song.html", location.protocol === "https:" ? location.href : PUBLIC_SITE);
   const code = slotsList.map(item => item ? item.seed.toString(36) + "." + item.player : "").join("-");
-  base.hash = code;
+  base.hash = "v2." + audio.take.toString(36) + "~" + code;
   return base.href;
 }
 
@@ -468,7 +467,7 @@ function catchItem(floater, player) {
 
 function release(index, player) {
   const item = slotsList[index];
-  if (!item || state === "idle") return;
+  if (!item || state === "idle" || state === "ascend") return;
   if (item.player !== player) {
     status(PLAYERS[item.player].label + "번 관람객의 칸이에요.");
     return;
@@ -1041,15 +1040,163 @@ function resetToIdle() {
 
 // 사람이 모두 떠나거나 완성 장면이 끝나면 저절로 처음으로 돌아간다.
 function housekeeping(time) {
-  if (state === "idle" || !cameraActive) { emptySince = 0; return; }
+  if (state === "review" && time - reviewSince > REVIEW_RESET_MS) { ascend(); return; }
+  if (state === "idle" || state === "ascend" || !cameraActive) { emptySince = 0; return; }
   if (present().length) emptySince = 0;
   else if (!emptySince) emptySince = time;
-  else if (time - emptySince > EMPTY_RESET_MS) { emptySince = 0; resetToIdle(); return; }
-  if (state === "review" && time - reviewSince > REVIEW_RESET_MS) {
-    const people = present();
-    startRound();
-    if (cameraActive) for (const player of people) join(player);
+  else if (time - emptySince > EMPTY_RESET_MS) {
+    emptySince = 0;
+    if (state === "review") ascend(); else resetToIdle();
   }
+}
+
+/* ── 엔딩: 15개 영감이 하늘로 올라가 별자리가 되고, 그날의 하늘에 남는다 ── */
+const SKY_KEY = "inspiration-universe-sky-" + new Date().toLocaleDateString("sv");
+let constellations = [];
+try { constellations = JSON.parse(localStorage.getItem(SKY_KEY) || "[]"); } catch {}
+
+function saveSky() {
+  try { localStorage.setItem(SKY_KEY, JSON.stringify(constellations.slice(-60))); } catch {}
+}
+
+// 별자리 한 개의 자리와 모양: 기존 별자리와 겹치지 않는 하늘 위쪽에 둔다.
+function planConstellation(items) {
+  let center = [.5, .3];
+  let best = -1;
+  for (let i = 0; i < 40; i += 1) {
+    const c = [.14 + Math.random() * .72, .1 + Math.random() * .38];
+    const room = Math.min(1, ...constellations.slice(-24).map(k => Math.hypot((k.c[0] - c[0]) * 1.78, k.c[1] - c[1])));
+    if (room > best) { best = room; center = c; }
+  }
+  // 영감 목록으로 정해지는 난수: 같은 조합이면 같은 모양
+  let seed = items.reduce((a, item) => (a * 31 + item.seed + 7) % 2147483647, 17);
+  const rand = () => (seed = seed * 48271 % 2147483647) / 2147483647;
+  const rx = .1 + rand() * .035, ry = .1 + rand() * .04;
+  const points = [];
+  for (const item of items) {
+    let best = null, bestGap = -1;
+    for (let t = 0; t < 24; t += 1) {
+      const a = rand() * Math.PI * 2, r = Math.sqrt(rand());
+      const q = [center[0] + Math.cos(a) * rx * r, center[1] + Math.sin(a) * ry * r];
+      const gap = Math.min(1, ...points.map(o => Math.hypot((o[0] - q[0]) * 1.78, o[1] - q[1])));
+      if (gap > bestGap) { best = q; bestGap = gap; }
+      if (gap > .05) break;
+    }
+    points.push([+best[0].toFixed(4), +clamp(best[1], .05, .62).toFixed(4), item.player]);
+  }
+  // 가까운 별끼리 잇는 최소 신장 트리: 실제 별자리처럼 가지가 갈라진다
+  const edges = [];
+  const linked = new Set([0]);
+  while (linked.size < points.length) {
+    let pick = null, bestD = Infinity;
+    for (const i of linked) points.forEach((q, j) => {
+      if (linked.has(j)) return;
+      const d = Math.hypot((points[i][0] - q[0]) * 1.78, points[i][1] - q[1]);
+      if (d < bestD) { bestD = d; pick = [i, j]; }
+    });
+    linked.add(pick[1]);
+    edges.push(pick);
+  }
+  const now = new Date();
+  const label = (now.getMonth() + 1) + "월 " + now.getDate() + "일 " + now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) + "의 별자리";
+  return { c: center, p: points, e: edges, label, t: now.getTime() };
+}
+
+function constellationSvg(k, fresh) {
+  const ns = "http://www.w3.org/2000/svg";
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "constellation" + (fresh ? " fresh" : ""));
+  const edges = k.e || k.p.slice(1).map((_, i) => [i, i + 1]);
+  edges.forEach(([a, b], n) => {
+    const line = document.createElementNS(ns, "path");
+    line.setAttribute("d", "M" + (k.p[a][0] * 1600).toFixed(1) + " " + (k.p[a][1] * 900).toFixed(1) + "L" + (k.p[b][0] * 1600).toFixed(1) + " " + (k.p[b][1] * 900).toFixed(1));
+    line.setAttribute("pathLength", "1");
+    line.style.setProperty("--n", n);
+    g.append(line);
+  });
+  k.p.forEach(([x, y, player], i) => {
+    const star = document.createElementNS(ns, "circle");
+    star.setAttribute("cx", (x * 1600).toFixed(1));
+    star.setAttribute("cy", (y * 900).toFixed(1));
+    star.setAttribute("r", i === 0 ? "5" : (2.2 + (i * 7 % 5) * .45).toFixed(1));
+    star.style.setProperty("--player", PLAYERS[player]?.color || "#fff");
+    star.style.setProperty("--i", i);
+    g.append(star);
+  });
+  const text = document.createElementNS(ns, "text");
+  const top = Math.min(...k.p.map(p => p[1]));
+  text.setAttribute("x", (k.c[0] * 1600).toFixed(1));
+  text.setAttribute("y", (Math.max(.04, top - .025) * 900).toFixed(1));
+  text.textContent = k.label;
+  g.append(text);
+  return g;
+}
+
+function drawSky() {
+  const svg = byId("sky-constellations");
+  if (!svg) return;
+  const list = constellations.slice(-40);
+  svg.replaceChildren(...list.map((k, i) => {
+    const g = constellationSvg(k, false);
+    g.style.setProperty("--age", (list.length - 1 - i) / Math.max(1, list.length));
+    return g;
+  }));
+}
+
+function ascend() {
+  if (state !== "review") return;
+  const items = slotsList.filter(Boolean);
+  if (!items.length) { resetToIdle(); return; }
+  const people = present();
+  setState("ascend");
+  hint("");
+  status("우리의 음악이 별자리가 되어 하늘에 남았어요.");
+  const k = planConstellation(items);
+  const bounds = stage.getBoundingClientRect();
+  const cells = [...slots.children];
+  items.forEach((item, i) => {
+    const cell = cells[slotsList.indexOf(item)];
+    if (!cell) return;
+    const r = cell.getBoundingClientRect();
+    const ghost = (cell.querySelector("img, .slot-word") || cell).cloneNode(true);
+    ghost.className = "rising";
+    ghost.style.setProperty("--player", PLAYERS[item.player].color);
+    stage.append(ghost);
+    const from = [r.left - bounds.left + r.width / 2, r.top - bounds.top + r.height / 2];
+    const to = [k.p[i][0] * bounds.width, k.p[i][1] * bounds.height];
+    ghost.style.left = from[0] + "px";
+    ghost.style.top = from[1] + "px";
+    ghost.style.width = r.width * .8 + "px";
+    const lift = -bounds.height * (.12 + Math.random() * .08);
+    ghost.animate([
+      { transform: "translate(-50%,-50%) scale(1)", opacity: 1 },
+      { transform: `translate(calc(-50% + ${(to[0] - from[0]) * .5}px), calc(-50% + ${(to[1] - from[1]) * .5 + lift}px)) scale(.6) rotate(140deg)`, opacity: 1, offset: .55 },
+      { transform: `translate(calc(-50% + ${to[0] - from[0]}px), calc(-50% + ${to[1] - from[1]}px)) scale(.06) rotate(300deg)`, opacity: 0 },
+    ], { duration: 2300, delay: i * 140, easing: "cubic-bezier(.5,0,.3,1)", fill: "both" }).finished.then(() => {
+      ghost.remove();
+      for (let n = 0; n < 14; n += 1) {
+        const a = Math.random() * Math.PI * 2, v = 1 + Math.random() * 4;
+        particles.push({ x: to[0], y: to[1], vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, decay: .03, size: 1.5 + Math.random() * 2, color: PLAYERS[item.player].light, drag: .92 });
+      }
+    });
+  });
+  // 영감이 모두 자리를 잡으면 선이 이어지고 이름이 붙는다.
+  const settle = 2300 + items.length * 140;
+  setTimeout(() => {
+    constellations.push(k);
+    saveSky();
+    drawSky();
+    const svg = byId("sky-constellations");
+    svg.lastChild?.classList.add("fresh");
+  }, settle - 200);
+  setTimeout(() => {
+    if (state !== "ascend") return;
+    if (cameraActive && people.some(p => actors[p].present)) {
+      startRound();
+      for (const player of people) join(player);
+      status("앞선 별자리 아래에서 새 우주가 시작돼요.");
+    } else resetToIdle();
+  }, settle + 3600);
 }
 
 /* ── 이벤트 ───────────────────────────────────────── */
@@ -1058,7 +1205,8 @@ function pointer(event) {
   return [(event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height];
 }
 
-byId("again").addEventListener("click", startRound);
+byId("again").addEventListener("click", () => { if (state === "review") ascend(); else startRound(); });
+drawSky();
 byId("players").addEventListener("click", event => {
   const button = event.target.closest("button[data-player]");
   if (button) selectPlayer(Number(button.dataset.player));
@@ -1086,6 +1234,8 @@ document.addEventListener("keydown", event => {
   if (event.key === "v" || event.key === "V") stage.classList.toggle("show-camera");
   if (event.key === "f" || event.key === "F") byId("perf").hidden = !byId("perf").hidden;
   if (event.key === "l" || event.key === "L") { stage.classList.toggle("lite"); resize(); }
+  // 운영용: Shift + C 로 오늘 쌓인 별자리를 모두 지운다.
+  if (event.key === "C" && event.shiftKey) { constellations = []; saveSky(); drawSky(); status("오늘의 별자리를 비웠어요."); }
   if (event.key === " " && state === "active" && !cameraActive) {
     event.preventDefault();
     const net = nets[selectedPlayer];

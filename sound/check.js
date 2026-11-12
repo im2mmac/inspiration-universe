@@ -1,6 +1,6 @@
 import { cueOptions, cueUrl, preferences, setPreference } from "../sound-options.js";
 import { SunoLoops, loadSunoPack, selectedSunoPack, selectSunoPack, sunoCatalog } from "../suno-audio.js";
-import { UniverseAudio } from "../audio-engine.js";
+import { UniverseAudio, arrangementName, nextArrangement } from "../audio-engine.js";
 import { inspirationSound } from "../inspiration-audio.js";
 import { catalog } from "../items.js";
 
@@ -118,7 +118,7 @@ async function setupSuno() {
     pack = packs.find(option => option.id === select.value);
     selectSunoPack(pack.id);
     showTracks();
-    status.textContent = "체험판에 적용했어요.";
+    status.textContent = "";
   });
   field.addEventListener("change", () => applyTracks());
   transport.addEventListener("click", async () => {
@@ -175,6 +175,7 @@ const caught = new Map();
 const layerLimit = 15;
 let inspirationAudio;
 let nextId = 0;
+let lastTake = 0;
 
 for (const item of catalog) {
   inspirationSelect.add(new Option(item.name + " · " + inspirationSound(item).label, item.seed));
@@ -220,19 +221,20 @@ catchButton.addEventListener("click", async () => {
   stopTracks();
   audition.pause();
   stopSuno();
-  const engine = inspirationAudio ??= new UniverseAudio();
+  const engine = inspirationAudio ??= new UniverseAudio({ take: nextArrangement(lastTake || undefined) });
   catchButton.disabled = true;
   stopButton.hidden = false;
   try {
     await engine.start();
     if (engine !== inspirationAudio) return;
+    lastTake = engine.take;
     const slots = new Set(Array.from(caught.values(), item => item.slot));
     const slot = Array.from({ length: layerLimit }, (_, index) => index).find(index => !slots.has(index));
     const item = { ...source, slot, id: ++nextId };
     caught.set(item.seed, item);
     engine.capture(item);
     drawCaught();
-    inspirationStatus.textContent = inspirationSound(item).label + " 합류 · 레이어 " + caught.size + "개";
+    inspirationStatus.textContent = arrangementName(engine.take) + " · " + inspirationSound(item).label + " 합류 · 레이어 " + caught.size + "개";
   } catch {
     if (engine !== inspirationAudio) return;
     stopInspirations();

@@ -320,3 +320,29 @@
 .stage.lite .actor .ground { filter: none; }
 .stage.lite .art-layer.image img, .stage.lite .art-layer.word { filter: none; }
 .stage.lite .item.aimed .body { filter: brightness(1.3); }
+
+/* ── 그날의 하늘에 남는 별자리 ── */
+.stage .sky-constellations { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; overflow: visible; }
+.stage .constellation { opacity: calc(.75 - var(--age, 0) * .45); }
+.stage .constellation path {
+  fill: none; stroke: #f0cf8e; stroke-width: 1; stroke-opacity: .45; vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1; stroke-dashoffset: 0;
+}
+.stage .constellation circle { fill: #fff8e8; filter: drop-shadow(0 0 4px var(--player)) drop-shadow(0 0 9px var(--player)); }
+.stage .constellation text {
+  font: 500 15px var(--serif); fill: #f0cf8e; fill-opacity: .7; text-anchor: middle; letter-spacing: .06em;
+}
+.stage .constellation.fresh path { animation: draw-line .5s calc(var(--n) * 110ms) ease-out both; stroke-opacity: .85; stroke-width: 1.6; }
+.stage .constellation.fresh circle { animation: star-pop .7s calc(var(--i) * 60ms) cubic-bezier(.2, 1.8, .4, 1) both; }
+.stage .constellation.fresh text { animation: label-in 1.2s 1.8s ease-out both; font-size: 22px; fill-opacity: 1; }
+@keyframes draw-line { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes star-pop { from { r: 0; opacity: 0; } 60% { r: 7px; opacity: 1; } }
+@keyframes label-in { from { opacity: 0; transform: translateY(10px); } }
+.stage .rising {
+  position: absolute; z-index: 8; pointer-events: none; aspect-ratio: 1; object-fit: contain;
+  display: grid; place-items: center; text-align: center; font: 600 1.1cqw/1.1 var(--serif); color: #fff6e0;
+  filter: drop-shadow(0 0 1cqw var(--player)) brightness(1.3);
+}
+.stage[data-state="ascend"] .slots { opacity: .35; transition: opacity 1.5s; }
+.stage[data-state="ascend"] .art-layer { opacity: 0 !important; transition: opacity 1.5s; }
+.stage.lite .constellation circle { filter: none; }

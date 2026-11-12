@@ -55,6 +55,7 @@ export class SunoLoops {
       const level = this.context.createGain();
       level.gain.value = track.bed;
       source.connect(level).connect(this.output);
+      source.onended = () => { source.disconnect(); level.disconnect(); };
       source.start(at);
       this.layers.set(track.id, { source, gain: level.gain });
     }

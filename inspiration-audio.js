@@ -22,6 +22,11 @@ const sounds = {
 const originalCues = { bell: "catch-5", glass: "layer-5" };
 const recorded = new Set(["depth", "water", "wood", "seeds", "air", "felt", "frost"]);
 const swingDelay = [0, .024, .055, .03];
+const phrases = {
+  base: [[2, 10], [4, 13], [6, 12], [3, 14]],
+  melody: [[6, 13], [7, 12], [5, 14], [6, 11]],
+  texture: [[10], [13], [7], [14]],
+};
 const assigned = new Map();
 for (const [family, [, ...names]] of Object.entries(sounds)) {
   for (const name of names) assigned.set(name, family);
@@ -55,11 +60,13 @@ export async function loadInspirationSamples(context) {
 }
 
 export class InspirationLayers {
-  constructor(context, output, buffers) {
+  constructor(context, output, buffers, take = 0) {
     this.context = context;
     this.output = output;
     this.buffers = buffers;
     this.voices = new Map();
+    this.take = take;
+    this.groups = {};
   }
 
   hit(sound, output, at, level, rate = sound.rate) {
@@ -88,10 +95,10 @@ export class InspirationLayers {
       if (ids.has(id)) continue;
       voice.gain.gain.cancelScheduledValues(at);
       voice.gain.gain.setTargetAtTime(0, at, .032);
-      setTimeout(() => voice.gain.disconnect(), 250);
+      if (step !== null) setTimeout(() => voice.gain.disconnect(), 250);
       this.voices.delete(id);
     }
-    const level = .46 / Math.sqrt(1 + Math.max(0, items.length - 1) * .14);
+    const level = (this.take ? .38 : .46) / Math.sqrt(1 + Math.max(0, items.length - 1) * .14);
     for (const item of items) {
       let voice = this.voices.get(item.id);
       if (!voice) {
@@ -104,15 +111,34 @@ export class InspirationLayers {
         const gain = this.context.createGain();
         gain.gain.value = level;
         gain.connect(this.output);
-        voice = { sound, pulses, gain, timing: item.seed % 7 * .002, minStep: step === null ? 0 : step + 4 };
+        voice = {
+          sound, pulses, gain, role: item.role, seed: item.seed,
+          timing: item.seed % 7 * .002, minStep: step === null ? 0 : step + 4,
+        };
         this.voices.set(item.id, voice);
-        if (step !== null) this.hit(sound, gain, at, .88);
+        if (step !== null) this.hit(sound, gain, at, this.take ? .72 : .88);
       }
       voice.gain.gain.setTargetAtTime(level, at, .04);
+    }
+    if (this.take) {
+      this.groups = { base: [], melody: [], texture: [] };
+      for (const voice of this.voices.values()) this.groups[voice.role]?.push(voice);
     }
   }
 
   schedule(step, at) {
+    if (this.take) {
+      const bar = Math.floor(step / 16);
+      for (const [role, group] of Object.entries(this.groups)) {
+        if (!group.length) continue;
+        const index = (bar + this.take) % group.length;
+        this.playPhrase(group[index], step, at, bar);
+        if (role === "base" && group.length > 1 && step % 16 >= 8) {
+          this.playPhrase(group[(index + 1) % group.length], step, at, bar, .55);
+        }
+      }
+      return;
+    }
     for (const voice of this.voices.values()) {
       const strength = voice.pulses.get(step % 64);
       if (strength && step >= voice.minStep) {
@@ -120,5 +146,17 @@ export class InspirationLayers {
         this.hit(voice.sound, voice.gain, playedAt, strength);
       }
     }
+  }
+
+  playPhrase(voice, step, at, bar, answer = 1) {
+    if (step < voice.minStep) return;
+    const pattern = phrases[voice.role][(voice.seed + this.take + Math.floor(bar / 2)) % 4];
+    const offset = bar % 4 === 3 ? 1 : 0;
+    const position = pattern.indexOf(step % 16 - offset);
+    if (position < 0) return;
+    const pulse = position === 0 ? .9 : .58;
+    const color = voice.sound.natural ? 1 : .72;
+    const timing = swingDelay[step % 4] + voice.timing;
+    this.hit(voice.sound, voice.gain, at + timing, answer * pulse * color);
   }
 }
