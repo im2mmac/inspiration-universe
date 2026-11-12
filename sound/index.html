@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a1124">
+<title>사운드 체크 · 영감의 우주</title>
+<link rel="stylesheet" href="../site.css">
+</head>
+<body class="sound-page">
+<header class="bar">
+  <a class="brand" href="../"><span aria-hidden="true">✧</span> 영감의 우주</a>
+  <nav><a href="../">체험판 열기</a></nav>
+</header>
+<main class="listen">
+  <div class="listen-heading">
+    <h1>사운드 체크</h1>
+    <p>오가닉 앰비언트 · 92 BPM · 4/4 · 시안 0.2</p>
+  </div>
+  <section class="track">
+    <div><h2>심연 → 호수</h2><span>24초</span></div>
+    <p>8초 전후에 유리음이 들어오며 낮은 울림이 잠시 비켜납니다.</p>
+    <audio controls preload="none" aria-label="심연에서 호수로" src="../assets/audio/abyss-to-lake.wav"></audio>
+    <a href="../assets/audio/abyss-to-lake.wav" download>WAV 저장</a>
+  </section>
+  <section class="track">
+    <div><h2>호수 → 심연</h2><span>24초</span></div>
+    <p>같은 두 영감을 반대로 낚으면, 짧은 맥박 뒤에 긴 여운이 생깁니다.</p>
+    <audio controls preload="none" aria-label="호수에서 심연으로" src="../assets/audio/lake-to-abyss.wav"></audio>
+    <a href="../assets/audio/lake-to-abyss.wav" download>WAV 저장</a>
+  </section>
+  <section class="track">
+    <div><h2>두 사람의 합주와 놓아주기</h2><span>32초</span></div>
+    <p>19초 이후, 한 사람이 심연을 놓아주며 남은 호수의 구절이 바뀝니다.</p>
+    <audio controls preload="none" aria-label="두 사람의 합주와 놓아주기" src="../assets/audio/ensemble-and-release.wav"></audio>
+    <a href="../assets/audio/ensemble-and-release.wav" download>WAV 저장</a>
+  </section>
+  <section class="track cue-section" aria-labelledby="cue-heading">
+    <h2 id="cue-heading">액션 소리</h2>
+    <p>각 소리를 들어보고 고르면, 이 브라우저의 체험판에도 적용돼요.</p>
+    <div id="cue-controls"></div>
+    <p id="cue-status" role="status"></p>
+  </section>
+</main>
+<script type="module" src="./check.js"></script>
+</body>
+</html>

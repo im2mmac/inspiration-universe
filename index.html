@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a1124">
+<title>영감의 우주</title>
+<link rel="stylesheet" href="./site.css">
+</head>
+<body class="exhibit">
+<header class="bar">
+  <a class="brand" href="./"><span aria-hidden="true">✧</span> 영감의 우주</a>
+  <nav aria-label="도구">
+    <a href="./sound/">사운드 체크</a>
+    <button type="button" id="camera" aria-pressed="false">카메라</button>
+    <button type="button" id="mute" aria-pressed="false">소리 끄기</button>
+  </nav>
+</header>
+<main>
+  <section id="stage" class="stage" aria-label="영감의 우주 체험">
+    <div class="sky" aria-hidden="true"></div>
+    <div class="shade" aria-hidden="true"></div>
+    <div class="orbits" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div id="art-layers" class="art-layers" aria-hidden="true"></div>
+    <div id="effects" class="effects" aria-hidden="true"></div>
+    <div id="floaters" class="floaters" aria-label="떠다니는 영감"></div>
+    <div id="actors" class="actors" aria-hidden="true"></div>
+    <div id="opening" class="opening">
+      <h1>영감의 우주</h1>
+      <p>다가오는 영감을 낚아, 함께 한 곡을 만드세요.</p>
+      <button type="button" class="gold" id="start">우주로 들어가기</button>
+    </div>
+    <div id="finish" class="finish" hidden>
+      <h2>우리의 우주가 완성됐어요</h2>
+      <div class="finish-actions">
+        <button type="button" id="save" class="gold">음원 저장</button>
+        <button type="button" id="again">다시 시작</button>
+      </div>
+    </div>
+    <div id="tray" class="tray" hidden>
+      <div class="score" aria-live="polite"><strong id="count">00</strong> / 15</div>
+      <div class="slots" id="slots" aria-label="공동 수집 칸"></div>
+    </div>
+    <video id="camera-feed" muted playsinline hidden></video>
+  </section>
+  <div class="workbench">
+    <div class="players" id="players" aria-label="관람객 선택">
+      <button data-player="0" type="button" aria-pressed="true">1번 관람객</button>
+      <button data-player="1" type="button" aria-pressed="false">2번 관람객</button>
+      <button data-player="2" type="button" aria-pressed="false">3번 관람객</button>
+    </div>
+    <p id="status" role="status">화면을 누르거나 오른손으로 영감을 낚아보세요.</p>
+    <button type="button" class="quiet" id="fullscreen">전체 화면</button>
+  </div>
+</main>
+<footer>우주 사진 <a href="https://science.nasa.gov/asset/webb/cosmic-cliffs-in-the-carina-nebula-nircam-image/">NASA · ESA · CSA · STScI</a></footer>
+<script type="module" src="./exhibit.js"></script>
+</body>
+</html>
