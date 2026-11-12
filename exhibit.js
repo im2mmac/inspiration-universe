@@ -31,6 +31,7 @@ const APPROACH_MS = 5200;
 const HOVER_MS = 7600;
 const HOLD_RELEASE_MS = 1000;
 const DWELL_CATCH_MS = 900;
+const ERASE_MS = 900;            // 왼손 지우개를 내 칸에 대고 문지르는 시간
 const LIMIT = 15;
 const EMPTY_RESET_MS = 15000;   // 모두 떠난 뒤 이만큼 지나면 다시 빈 우주로
 const REVIEW_RESET_MS = 40000;  // 완성 장면을 들은 뒤 새 우주로
@@ -55,6 +56,8 @@ const nets = PLAYERS.map(() => ({
   x: .5, y: .45, tx: .5, ty: .45, closed: false, closedAt: -1e9, grip: 0, swish: 0,
   hover: null, hoverSince: 0, slot: null, slotSince: 0, hasHand: false, caught: 0,
 }));
+// 왼손을 펴면 나타나는 지우개
+const erasers = PLAYERS.map(() => ({ x: .5, y: .8, tx: .5, ty: .8, on: false, fade: 0, slot: null, rub: 0, lx: 0, ly: 0, used: 0 }));
 let state = "idle";
 let selectedPlayer = 0;
 let lastSpawn = 0;
@@ -154,7 +157,31 @@ function thumbnail(item) {
 }
 
 /* ── 상태 ──────────────────────────────────────────── */
+/* ── 완성작 공유: 고른 영감 목록을 주소에 담아 QR로 보여 준다 ──
+   휴대폰에서 song.html이 같은 목록으로 음악을 다시 만들어 내려받게 한다 (서버 업로드 없음). */
+const PUBLIC_SITE = "https://im2mmac.github.io/inspiration-universe/";
+function shareUrl() {
+  const local = /^(localhost|127\.|\[::1\]|$)/.test(location.hostname) || location.protocol === "file:";
+  const base = new URL("./song.html", local ? PUBLIC_SITE : location.href);
+  const code = slotsList.map(item => item ? item.seed.toString(36) + "." + item.player : "").join("-");
+  base.hash = code;
+  return base.href;
+}
+
+function drawQr() {
+  const box = byId("qr");
+  if (!box) return;
+  const url = shareUrl();
+  box.dataset.url = url;
+  if (!globalThis.qrcode) { box.textContent = url; return; }
+  const qr = globalThis.qrcode(0, "M");
+  qr.addData(url);
+  qr.make();
+  box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+
 function setState(next) {
+  if (next === "review") drawQr();
   state = next;
   stage.dataset.state = next;
   byId("tray").hidden = next === "idle";
@@ -434,7 +461,7 @@ function catchItem(floater, player) {
     clearFloaters();
     setState("review");
     reviewSince = performance.now();
-    status("15개가 모였어요. 함께 들어보세요. 자기 칸을 꽉 쥐면 영감을 놓아줄 수 있어요.");
+    status("15개가 모였어요. 함께 들어보세요. 왼손을 펴서 지우개로 내 칸을 문지르면 영감을 놓아줄 수 있어요.");
   } else if (previousRole !== activeRole()) clearFloaters();
   return true;
 }
@@ -673,7 +700,7 @@ function drawFx(time, dt) {
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
-  if (state !== "idle") for (const player of present()) drawNet(ctx, player, time);
+  if (state !== "idle") for (const player of present()) { drawNet(ctx, player, time); drawEraser(ctx, player, time); }
 }
 
 function updateFlights(time) {
@@ -715,9 +742,11 @@ function moveTracked(tracked, error) {
   tracked.forEach((pose, player) => {
     const actor = actors[player];
     const net = nets[player];
+    const eraser = erasers[player];
     if (!pose) {
       if (actor.present && now - actor.seen > 2000) leave(player);
       net.closed = false;
+      eraser.on = false;
       return;
     }
     actor.seen = now;
@@ -737,6 +766,17 @@ function moveTracked(tracked, error) {
       if (pose.closed && !net.closed) net.closedAt = now;
       net.closed = !!pose.closed;
     } else net.closed = false;
+    // 왼손을 펴면 지우개가 나타나 왼손을 따라간다.
+    const open = pose.leftPalm && pose.leftGrip !== null && pose.leftGrip < .4;
+    if (open) {
+      const rx = (pose.leftPalm[0] - pose.leftShoulder[0]) * (4 / 3) / pose.span;
+      const ry = (pose.leftPalm[1] - pose.leftShoulder[1]) / pose.span;
+      const tx = clamp(actor.tx - .05 + rx * .14, .03, .97);
+      const ty = clamp(.44 + ry * .2, .07, .97);
+      if (!eraser.on) { eraser.x = tx; eraser.y = ty; }
+      eraser.tx = tx; eraser.ty = ty;
+    }
+    eraser.on = !!open;
   });
   separateActors();
 }
@@ -807,9 +847,80 @@ function interact(time) {
     trayCells[index].classList.add("holding");
     if (progress >= 1) { release(index, player); net.slot = null; }
   }
+  if (cameraActive) for (const player of present()) erase(player, time, trayCells, bounds);
   for (const [i, el] of trayCells.entries()) {
-    if (!present().some(p => nets[p].slot === i)) { el.classList.remove("holding"); el.style.removeProperty("--hold"); }
+    if (!present().some(p => nets[p].slot === i || erasers[p].slot === i)) { el.classList.remove("holding"); el.style.removeProperty("--hold"); }
   }
+}
+
+// 지우개를 내 칸에 대고 있으면(문지를수록 빨리) 그 영감을 놓아준다.
+function erase(player, time, trayCells, bounds) {
+  const eraser = erasers[player];
+  const dt = Math.min(50, time - (eraser.last || time));
+  eraser.last = time;
+  eraser.fade = clamp(eraser.fade + (eraser.on ? dt : -dt) / 220, 0, 1);
+  if (!eraser.on) { eraser.slot = null; eraser.rub = 0; return; }
+  eraser.x = lerp(eraser.x, eraser.tx, .35);
+  eraser.y = lerp(eraser.y, eraser.ty, .35);
+  const moved = Math.hypot((eraser.x - eraser.lx) * size.w, (eraser.y - eraser.ly) * size.h);
+  eraser.lx = eraser.x; eraser.ly = eraser.y;
+  const x = bounds.left + eraser.x * bounds.width;
+  const y = bounds.top + eraser.y * bounds.height;
+  const index = trayCells.findIndex((el, i) => {
+    if (slotsList[i]?.player !== player) return false;
+    const r = el.getBoundingClientRect();
+    return x >= r.left - 10 && x <= r.right + 10 && y >= r.top - 14 && y <= r.bottom + 14;
+  });
+  if (index < 0) { eraser.slot = null; eraser.rub = 0; return; }
+  if (eraser.slot !== index) { eraser.slot = index; eraser.rub = 0; }
+  eraser.rub += dt / ERASE_MS + Math.min(moved, 40) / 900;
+  const progress = clamp(eraser.rub, 0, 1);
+  trayCells[index].style.setProperty("--hold", progress);
+  trayCells[index].classList.add("holding");
+  if (moved > 2 && Math.random() < .6) {
+    particles.push({ x: eraser.x * size.w, y: eraser.y * size.h, vx: (Math.random() - .5) * 3, vy: -Math.random() * 2.5, life: .9, decay: .03, size: 2 + Math.random() * 2, color: "#ffd9e6", drag: .95 });
+  }
+  if (progress >= 1) {
+    release(index, player);
+    eraser.slot = null; eraser.rub = 0; eraser.used += 1;
+  }
+}
+
+function drawEraser(ctx, player, time) {
+  const eraser = erasers[player];
+  if (eraser.fade <= 0) return;
+  const [x, y] = px(eraser.x, eraser.y);
+  const w = size.w * .05, h = w * .55;
+  const scrub = eraser.slot !== null ? Math.sin(time / 45) * .12 : 0;
+  ctx.save();
+  ctx.globalAlpha = eraser.fade;
+  ctx.translate(x, y);
+  ctx.rotate(-.35 + scrub);
+  ctx.shadowColor = PLAYERS[player].color;
+  ctx.shadowBlur = eraser.slot !== null ? 28 : 14;
+  const r = h * .28;
+  const round = (x0, y0, ww, hh) => {
+    ctx.beginPath();
+    ctx.moveTo(x0 + r, y0); ctx.lineTo(x0 + ww - r, y0); ctx.quadraticCurveTo(x0 + ww, y0, x0 + ww, y0 + r);
+    ctx.lineTo(x0 + ww, y0 + hh - r); ctx.quadraticCurveTo(x0 + ww, y0 + hh, x0 + ww - r, y0 + hh);
+    ctx.lineTo(x0 + r, y0 + hh); ctx.quadraticCurveTo(x0, y0 + hh, x0, y0 + hh - r);
+    ctx.lineTo(x0, y0 + r); ctx.quadraticCurveTo(x0, y0, x0 + r, y0); ctx.closePath();
+  };
+  // 분홍 고무 + 선수 색 슬리브 + 금빛 테
+  round(-w / 2, -h / 2, w, h);
+  const body = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+  body.addColorStop(0, "#ffe3ec"); body.addColorStop(1, "#f6a9c1");
+  ctx.fillStyle = body; ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = PLAYERS[player].color;
+  ctx.fillRect(w * .02, -h / 2, w * .48, h);
+  ctx.fillStyle = "#ffffff55";
+  ctx.fillRect(-w / 2, -h / 2, w, h * .22);
+  ctx.restore();
+  round(-w / 2, -h / 2, w, h);
+  ctx.strokeStyle = "#f2d08d"; ctx.lineWidth = size.w * .0018; ctx.stroke();
+  ctx.restore();
 }
 
 function updateActors(time) {
@@ -1019,6 +1130,22 @@ byId("save").addEventListener("click", async () => {
   } catch { status("음원 저장에 문제가 생겼어요. 다시 시도해 주세요."); }
   finally { button.disabled = false; }
 });
+// 우주 유영: 매 바퀴마다 다른 지점으로 빨려 들어가도록 확대 중심을 바꾼다.
+for (const layer of stage.querySelectorAll(".sky i")) {
+  const aim = () => {
+    layer.style.setProperty("--ox", (25 + Math.random() * 50).toFixed(1) + "%");
+    layer.style.setProperty("--oy", (25 + Math.random() * 40).toFixed(1) + "%");
+  };
+  aim();
+  layer.addEventListener("animationiteration", aim);
+}
+// assets/space-flight.mp4 가 있으면 (예: Higgsfield로 만든 우주 비행 영상) 사진 대신 영상을 배경으로 쓴다.
+{
+  const video = byId("sky-video");
+  video.addEventListener("loadeddata", () => { stage.classList.add("has-video"); video.play().catch(() => {}); });
+  video.addEventListener("error", () => stage.classList.remove("has-video"));
+  video.src = "./assets/space-flight.mp4";
+}
 window.addEventListener("pagehide", () => tracker.stop());
 new ResizeObserver(resize).observe(stage);
 resize();
@@ -1029,3 +1156,18 @@ requestAnimationFrame(frame);
 // 전시 PC에서는 페이지가 열리면 바로 카메라와 소리를 켠다 (권한을 한 번 허용해 두면 다음부터 묻지 않는다).
 wakeAudio();
 if (new URLSearchParams(location.search).get("camera") !== "off") startCamera();
+// 점검용: 주소에 ?debug=1 을 붙이면 콘솔에서 가짜 관람객 입력을 넣어 볼 수 있다.
+if (new URLSearchParams(location.search).get("debug") === "1") {
+  window.__universe = {
+    moveTracked, slotsList,
+    fakeCamera(on = true) { cameraActive = on; stage.classList.toggle("camera-on", on); },
+    fill() {
+      catalog.slice(0, LIMIT).forEach((base, i) => {
+        const item = { ...base, seed: base.seed * 7 % catalog.length, player: i % 3, slot: i, id: ++session, joinAt: 0 };
+        Object.assign(item, catalog[item.seed], { player: i % 3, slot: i });
+        slotsList[i] = item; selected.add(item.seed);
+      });
+      drawTray(); drawLayers(); clearFloaters(); setState("review");
+    },
+  };
+}

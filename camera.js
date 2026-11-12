@@ -129,7 +129,20 @@ export class WristCamera {
         });
         if (hand !== null) usedHands.add(hand);
       }
+      // 왼손목에 가장 가까운 손은 지우개 손으로 쓴다.
+      let leftHand = null;
+      if (leftWrist && (leftWrist.visibility ?? 1) >= .4 && hands.length) {
+        let best = .16;
+        hands.forEach((h, index) => {
+          if (usedHands.has(index)) return;
+          const d = dist(h[0], leftWrist);
+          const other = wrist ? dist(h[0], wrist) : 9;
+          if (d < best && d < other) { best = d; leftHand = index; }
+        });
+        if (leftHand !== null) usedHands.add(leftHand);
+      }
       const h = hand === null ? null : hands[hand];
+      const l = leftHand === null ? null : hands[leftHand];
       return [{
         x: 1 - (left.x + right.x) / 2,
         y: (left.y + right.y) / 2,
@@ -138,6 +151,9 @@ export class WristCamera {
         wrist: wrist && (wrist.visibility ?? 1) >= .45 ? [1 - wrist.x, wrist.y] : null,
         palm: h ? [1 - (h[0].x + h[9].x) / 2, (h[0].y + h[9].y) / 2] : null,
         grip: h ? gripOf(h) : null,
+        leftShoulder: [1 - left.x, left.y],
+        leftPalm: l ? [1 - (l[0].x + l[9].x) / 2, (l[0].y + l[9].y) / 2] : null,
+        leftGrip: l ? gripOf(l) : null,
       }];
     }).sort((a, b) => a.x - b.x);
 

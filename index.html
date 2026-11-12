@@ -18,7 +18,9 @@
 </header>
 <main>
   <section id="stage" class="stage" aria-label="영감의 우주 체험">
-    <div class="sky" aria-hidden="true"><i></i><i></i></div>
+    <div class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i>
+      <video id="sky-video" class="sky-video" muted loop playsinline preload="auto"></video>
+    </div>
     <canvas id="stars" class="layer" aria-hidden="true"></canvas>
     <div class="shade" aria-hidden="true"></div>
     <div class="orbits" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -34,14 +36,15 @@
     </div>
     <canvas id="fx" class="layer fx" aria-hidden="true"></canvas>
     <p id="hint" class="hint" aria-hidden="true"></p>
-    <div id="finish" class="finish" hidden>
-      <h2>우리의 우주가 완성됐어요</h2>
-      <p class="lede">함께 들어보세요</p>
+    <aside id="finish" class="finish" hidden>
+      <p class="done">우리의 음악이 완성되었어요</p>
+      <div id="qr" class="qr" role="img" aria-label="음악 다운로드 QR"></div>
+      <p class="qr-cap">휴대폰 카메라로 찍어<br>음악을 받아 가세요</p>
       <div class="finish-actions">
-        <button type="button" id="save" class="gold">음원 저장</button>
+        <button type="button" id="save">음원 저장</button>
         <button type="button" id="again">다시 시작</button>
       </div>
-    </div>
+    </aside>
     <video id="camera-feed" class="camera-feed" muted playsinline></video>
   </section>
   <div class="workbench">
@@ -55,6 +58,7 @@
   </div>
 </main>
 <footer>우주 사진 <a href="https://science.nasa.gov/asset/webb/cosmic-cliffs-in-the-carina-nebula-nircam-image/">NASA · ESA · CSA · STScI</a></footer>
+<script src="./vendor/qrcode.js"></script>
 <script type="module" src="./exhibit.js"></script>
 </body>
 </html>

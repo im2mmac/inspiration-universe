@@ -16,17 +16,26 @@
 /* ── 배경: NASA 사진 두 장을 천천히 겹쳐 유영 ── */
 .stage .sky { inset: 0; background: none; filter: none; animation: none; overflow: hidden; z-index: 0; }
 .stage .sky i {
-  position: absolute; inset: -6%; background: center / cover no-repeat url("./assets/carina.webp");
-  filter: brightness(.55) saturate(.9) contrast(1.05);
-  animation: voyage 46s ease-in-out infinite alternate;
+  /* 사진 네 겹이 번갈아 다가오며 끝없이 우주 안으로 들어가는 느낌을 만든다 */
+  position: absolute; inset: 0; background: center / cover no-repeat url("./assets/carina.webp");
+  transform-origin: var(--ox, 50%) var(--oy, 45%);
+  filter: brightness(.6) saturate(.95) contrast(1.05);
+  opacity: 0; animation: dive 48s linear infinite;
+  will-change: transform, opacity;
 }
-.stage .sky i + i {
-  background-image: url("./assets/deep.webp"); mix-blend-mode: screen; opacity: .38;
-  animation: voyage2 61s ease-in-out infinite alternate;
+.stage .sky i:nth-child(2) { background-image: url("./assets/deep.webp"); animation-delay: -12s; }
+.stage .sky i:nth-child(3) { animation-delay: -24s; }
+.stage .sky i:nth-child(4) { background-image: url("./assets/deep.webp"); animation-delay: -36s; }
+@keyframes dive {
+  0% { transform: scale(1.06) rotate(-1.5deg); opacity: 0; }
+  12% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: scale(2.6) rotate(2deg); opacity: 0; }
 }
-.stage[data-state="review"] .sky i { filter: brightness(.7) saturate(1.1); }
-@keyframes voyage { from { transform: scale(1.02) translate(0, 0); } to { transform: scale(1.18) translate(-2.5%, 1.8%); } }
-@keyframes voyage2 { from { transform: scale(1.25) rotate(-2deg); } to { transform: scale(1.05) rotate(1deg) translate(2%, -1%); } }
+.stage .sky .sky-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; filter: brightness(.7); }
+.stage.has-video .sky .sky-video { display: block; }
+.stage.has-video .sky i { display: none; }
+.stage[data-state="review"] .sky { filter: brightness(1.15) saturate(1.1); }
 .stage #stars { z-index: 1; }
 .stage .shade {
   z-index: 1;
@@ -58,7 +67,7 @@
   100% { opacity: calc(.07 + var(--energy, 0) * .2); }
 }
 .stage[data-state="review"] .art-layer { animation-name: ghost-in-strong; }
-@keyframes ghost-in-strong { to { opacity: .3; } }
+@keyframes ghost-in-strong { to { opacity: .18; } }
 
 /* ── 떠다니는 영감 ── */
 .stage .floaters { z-index: 3; pointer-events: none; perspective: 60cqw; }
@@ -252,32 +261,33 @@
 }
 .stage .hint.show { opacity: 1; translate: -50% .4cqw; }
 
-/* ── 시작, 완성 화면 ── */
-.stage .opening, .stage .finish {
-  position: absolute; inset: 0; z-index: 9; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 0 6cqw 6cqw; background: radial-gradient(ellipse at 50% 42%, #050a1a40, #03060fc0 75%);
+/* ── 완성: 왼쪽에 깜박이는 안내와 다운로드 QR ── */
+.stage .finish {
+  position: absolute; inset: auto; left: 2.2cqw; top: 6%; z-index: 9; width: 19cqw; height: auto;
+  flex-direction: column; justify-content: flex-start;
+  display: grid; justify-items: center; gap: .9cqw; padding: 1.6cqw 1.4cqw 1.3cqw;
+  border-radius: 1.4cqw; text-align: center;
+  background: linear-gradient(170deg, #121c3ee6, #070c22f0);
+  border: .12cqw solid #f0cf8e90;
+  box-shadow: 0 0 3cqw #f0cf8e40, inset 0 0 2cqw #f0cf8e14;
+  animation: panel-in .8s cubic-bezier(.2, 1.3, .4, 1);
 }
-.stage .finish { background: radial-gradient(ellipse at 50% 30%, transparent 30%, #03060f90 80%); justify-content: flex-start; padding-top: 6cqw; }
-.stage .eyebrow { margin: 0 0 1cqw; font: 500 1.1cqw/1 system-ui, sans-serif; letter-spacing: .4em; text-transform: uppercase; color: #f0cf8eb0; }
-.stage .opening h1 {
-  margin: 0; font: 600 8.4cqw/1.05 var(--serif); letter-spacing: .06em; color: #fff4d8;
-  text-shadow: 0 0 3cqw #f0cf8e60, 0 .4cqw 2cqw #000;
-  background: linear-gradient(180deg, #fffaf0 30%, #f0cf8e); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+.stage .finish .done {
+  margin: 0; font: 600 1.75cqw/1.3 var(--serif); color: #fff1cc; word-break: keep-all;
+  text-shadow: 0 0 1.2cqw #f0cf8e;
+  animation: blink 1.4s ease-in-out infinite;
 }
-.stage .finish h2 { margin: 0; font: 600 4.6cqw/1.1 var(--serif); color: #fff4d8; text-shadow: 0 0 2.5cqw #f0cf8e80; }
-.stage .lede { margin: 1.4cqw 0 2.2cqw; font: 400 1.7cqw/1.4 var(--serif); color: #f6ead2; }
-.stage .how { display: flex; gap: 1.2cqw; margin: 0 0 2.6cqw; padding: 0; list-style: none; counter-reset: how; }
-.stage .how li {
-  counter-increment: how; display: grid; gap: .3cqw; min-width: 13cqw; padding: 1cqw 1.4cqw; border-radius: 1cqw;
-  border: .1cqw solid #f0cf8e40; background: #0a122ab0;
+.stage .finish .qr {
+  width: 14cqw; aspect-ratio: 1; padding: .5cqw; border-radius: .8cqw; background: #fff;
+  box-shadow: 0 0 2cqw #f0cf8e80;
 }
-.stage .how b { font: 600 1.45cqw/1.2 var(--serif); color: #fff1cc; }
-.stage .how b::before { content: counter(how) "  "; color: var(--gold); }
-.stage .how span { font-size: 1.05cqw; color: #d8c9ad; }
-.stage .opening .gold, .stage .finish .gold, .stage .finish button {
-  font-size: 1.5cqw; padding: .9cqw 2.4cqw; border-radius: 99px;
-}
-.stage .finish-actions { display: flex; gap: 1cqw; }
+.stage .finish .qr svg { display: block; width: 100%; height: 100%; }
+.stage .finish .qr-cap { margin: 0; font: 500 1.05cqw/1.4 var(--serif); color: #e9dcc0; }
+.stage .finish-actions { display: flex; gap: .5cqw; }
+.stage .finish-actions button { font-size: .85cqw; padding: .35cqw .9cqw; border-radius: 99px; opacity: .65; }
+.stage.camera-on .finish-actions { display: none; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes panel-in { from { opacity: 0; translate: -3cqw 0; scale: .9; } }
 
 /* 설치 점검용 카메라 미리보기 (키보드 V) */
 .stage .camera-feed {

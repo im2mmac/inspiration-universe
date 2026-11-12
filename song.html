@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#060b1c">
+<title>우리의 음악 · 영감의 우주</title>
+<style>
+  :root { color-scheme: dark; --gold: #f0cf8e; font: 16px/1.5 system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; min-height: 100vh; color: #f6edda; background: radial-gradient(ellipse at 50% 0%, #22305a, #060b1c 70%); }
+  main { width: min(100% - 2rem, 30rem); margin: 0 auto; padding: 2.4rem 0 3rem; text-align: center; }
+  .eyebrow { margin: 0; color: #f0cf8eb0; letter-spacing: .3em; font-size: .72rem; text-transform: uppercase; }
+  h1 { margin: .4rem 0 .3rem; font: 600 2.1rem/1.2 "Noto Serif KR", "AppleMyungjo", Batang, serif; color: #fff4d8; }
+  .sub { margin: 0 0 1.6rem; color: #d8c9ad; font-size: .92rem; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: .45rem; margin-bottom: 1.6rem; }
+  .cell { aspect-ratio: 1; border-radius: .6rem; display: grid; place-items: center; overflow: hidden; position: relative;
+    border: 2px solid var(--p); background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--p) 30%, transparent), #0c1430 75%);
+    font: 600 .7rem/1.15 "Noto Serif KR", serif; padding: .2rem; word-break: keep-all; }
+  .cell img { width: 88%; height: 88%; object-fit: contain; }
+  button, a.button { display: block; width: 100%; padding: 1rem; border-radius: 99px; font: 700 1.05rem system-ui, sans-serif; text-decoration: none; text-align: center;
+    color: #21182c; background: linear-gradient(165deg, #f5dda7, #b78d51); border: 0; cursor: pointer; }
+  button:disabled { opacity: .6; }
+  audio { width: 100%; margin: 1rem 0; }
+  #status { color: #d8c9ad; font-size: .85rem; min-height: 1.3em; }
+  .credit { margin-top: 2rem; font-size: .7rem; color: #8f8670; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Inspiration Universe</p>
+  <h1>우리의 음악</h1>
+  <p class="sub" id="who">영감의 우주에서 함께 낚은 영감으로 만든 음악이에요.</p>
+  <div class="grid" id="grid"></div>
+  <button type="button" id="make">음악 만들기</button>
+  <div id="result" hidden>
+    <audio id="player" controls playsinline></audio>
+    <a class="button" id="download" download="영감의-우주-우리의-음악.wav">휴대폰에 저장하기</a>
+  </div>
+  <p id="status" role="status"></p>
+  <p class="credit">Team Musicscape · 우주 사진 NASA, ESA, CSA, STScI</p>
+</main>
+<script type="module" src="./song.js"></script>
+</body>
+</html>
