@@ -60,27 +60,6 @@ export class SunoLoops {
     }
   }
 
-  pick(role, items) {
-    const counts = new Map();
-    for (const item of items) counts.set(item.stemId, (counts.get(item.stemId) ?? 0) + 1);
-    const candidates = this.tracks.filter(track => track.role === role);
-    return candidates.reduce((best, track) =>
-      (counts.get(track.id) ?? 0) < (counts.get(best.id) ?? 0) ? track : best, candidates[0]
-    )?.id;
-  }
-
-  arrange(items, at, immediate = false) {
-    const players = new Set(items.map(item => item.player));
-    const levels = {};
-    for (const track of this.tracks) {
-      const count = items.filter(item => item.stemId === track.id).length;
-      const active = count ? .76 + Math.min(count - 1, 3) * .06 : 0;
-      const spaceForOthers = players.size > 1 && track.role === "base" ? .78 : 1;
-      levels[track.id] = Math.max(track.bed, active * spaceForOthers);
-    }
-    this.setLevels(levels, at, immediate);
-  }
-
   setLevels(levels, at, immediate = false) {
     for (const [id, { gain }] of this.layers) {
       gain.cancelScheduledValues(at);

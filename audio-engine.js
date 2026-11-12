@@ -33,7 +33,7 @@ export class UniverseAudio {
 
   async start() {
     if (!this.context) this.initialize();
-    await Promise.all([this.context.resume(), this.audioReady]);
+    await Promise.all([this.context.resume(), this.ready]);
     if (this.timer || this.closed) return;
     this.origin = this.context.currentTime + .09;
     this.next = this.origin;
@@ -58,8 +58,7 @@ export class UniverseAudio {
     this.layersReady = loadInspirationSamples(this.context).then(samples => {
       this.layers = new InspirationLayers(this.context, this.bus.input, samples);
     });
-    this.audioReady = Promise.all([this.layersReady, this.prepareBed()]);
-    this.ready = Promise.allSettled([...cueLoads, this.audioReady]);
+    this.ready = Promise.allSettled([...cueLoads, this.layersReady, this.prepareBed()]);
   }
 
   async prepareBed() {
@@ -170,7 +169,7 @@ export class UniverseAudio {
 
   async render(items) {
     if (!this.context) this.initialize();
-    await this.audioReady;
+    await this.ready;
     const Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
     const rate = 44100;
     const context = new Offline(2, Math.round(rate * sunoLoopSeconds), rate);

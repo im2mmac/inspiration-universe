@@ -125,6 +125,9 @@ footer a { text-decoration: underline; }
 #suno-tracks { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin: .7rem 0 0; padding: .4rem .65rem .65rem; border: 1px solid var(--line); border-radius: 6px; }
 #suno-tracks label, #suno-tracks legend { font-size: .84rem; }
 #suno-tracks input { accent-color: #f1d39b; }
+#inspiration-layers { display: flex; flex-wrap: wrap; gap: .45rem; padding: 0; list-style: none; }
+#inspiration-layers:empty { display: none; }
+#inspiration-layers button { padding: .35rem .55rem; font-size: .83rem; }
 .track a { display: inline-flex; padding-top: .65rem; color: #f1d39b; text-decoration: underline; font-size: .84rem; }
 @media (max-width: 620px) {
   .stage { aspect-ratio: 5 / 6; min-height: 355px; max-height: 72vh; }

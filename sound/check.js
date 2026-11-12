@@ -1,11 +1,15 @@
 import { cueOptions, cueUrl, preferences, setPreference } from "../sound-options.js";
 import { SunoLoops, loadSunoPack, selectedSunoPack, selectSunoPack, sunoCatalog } from "../suno-audio.js";
+import { UniverseAudio } from "../audio-engine.js";
+import { inspirationSound } from "../inspiration-audio.js";
+import { catalog } from "../items.js";
 
 const host = document.querySelector("#cue-controls");
 const tracks = [...document.querySelectorAll("audio")];
 const audition = new Audio();
 const selected = preferences();
 let stopSuno = () => {};
+let stopInspirations = () => {};
 
 function stopTracks() {
   for (const track of tracks) track.pause();
@@ -15,6 +19,7 @@ for (const track of tracks) {
   track.addEventListener("play", () => {
     audition.pause();
     stopSuno();
+    stopInspirations();
     for (const other of tracks) if (other !== track) other.pause();
   });
 }
@@ -50,6 +55,7 @@ for (const [kind, option] of Object.entries(cueOptions)) {
   play.addEventListener("click", async () => {
     stopTracks();
     stopSuno();
+    stopInspirations();
     audition.src = download.href;
     try { await audition.play(); } catch {
       document.querySelector("#cue-status").textContent = "효과음을 재생할 수 없어요. 저장 링크로도 들을 수 있어요.";
@@ -71,22 +77,22 @@ async function setupSuno() {
   let context;
   let mix;
 
-  function applyTracks() {
+  function applyTracks(at = context?.currentTime, immediate = false) {
     if (!mix) return;
     const levels = Object.fromEntries(Array.from(field.querySelectorAll("input"), input =>
       [input.value, input.checked ? .68 : 0]
     ));
-    mix.setLevels(levels, context.currentTime);
+    mix.setLevels(levels, at, immediate);
   }
 
   function showTracks() {
     const legend = field.querySelector("legend");
-    const labels = pack.tracks.map(track => {
+    const labels = pack.tracks.map((track, index) => {
       const label = document.createElement("label");
       const input = document.createElement("input");
       input.type = "checkbox";
       input.value = track.id;
-      input.checked = true;
+      input.checked = index === 0;
       label.append(input, " " + track.label);
       return label;
     });
@@ -108,12 +114,13 @@ async function setupSuno() {
   select.value = pack.id;
   select.addEventListener("change", () => {
     stopSuno();
+    stopInspirations();
     pack = packs.find(option => option.id === select.value);
     selectSunoPack(pack.id);
     showTracks();
     status.textContent = "체험판에 적용했어요.";
   });
-  field.addEventListener("change", applyTracks);
+  field.addEventListener("change", () => applyTracks());
   transport.addEventListener("click", async () => {
     if (context) {
       stopSuno();
@@ -121,6 +128,7 @@ async function setupSuno() {
     }
     stopTracks();
     audition.pause();
+    stopInspirations();
     const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!Audio) {
       status.textContent = "이 브라우저에서는 레이어를 재생할 수 없어요.";
@@ -137,8 +145,9 @@ async function setupSuno() {
       const output = listening.createDynamicsCompressor();
       output.connect(listening.destination);
       mix = new SunoLoops(listening, output, tracks);
-      mix.start(listening.currentTime + .03);
-      applyTracks();
+      const startAt = listening.currentTime + .03;
+      mix.start(startAt);
+      applyTracks(startAt, true);
       transport.textContent = "정지";
     } catch {
       if (context !== listening) return;
@@ -156,3 +165,77 @@ async function setupSuno() {
 }
 
 void setupSuno();
+
+const inspirationSelect = document.querySelector("#inspiration-select");
+const catchButton = document.querySelector("#inspiration-catch");
+const stopButton = document.querySelector("#inspiration-stop");
+const inspirationList = document.querySelector("#inspiration-layers");
+const inspirationStatus = document.querySelector("#inspiration-status");
+const caught = new Map();
+const layerLimit = 15;
+let inspirationAudio;
+let nextId = 0;
+
+for (const item of catalog) {
+  inspirationSelect.add(new Option(item.name + " · " + inspirationSound(item).label, item.seed));
+}
+
+function drawCaught() {
+  inspirationList.replaceChildren(...Array.from(caught.values(), item => {
+    const row = document.createElement("li");
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = item.name + " ×";
+    remove.setAttribute("aria-label", item.name + " 놓아주기");
+    remove.addEventListener("click", () => {
+      inspirationAudio.release(item);
+      caught.delete(item.seed);
+      drawCaught();
+      inspirationStatus.textContent = item.name + " · 레이어 " + caught.size + "개";
+    });
+    row.append(remove);
+    return row;
+  }));
+  for (const option of inspirationSelect.options) option.disabled = caught.has(Number(option.value));
+  const available = Array.from(inspirationSelect.options).find(option => !option.disabled);
+  if (inspirationSelect.selectedOptions[0]?.disabled && available) inspirationSelect.value = available.value;
+  catchButton.disabled = caught.size >= layerLimit;
+}
+
+stopInspirations = () => {
+  if (!inspirationAudio) return;
+  void inspirationAudio.close().catch(() => {});
+  inspirationAudio = null;
+  caught.clear();
+  drawCaught();
+  stopButton.hidden = true;
+  inspirationStatus.textContent = "";
+};
+
+stopButton.addEventListener("click", () => stopInspirations());
+
+catchButton.addEventListener("click", async () => {
+  const source = catalog[Number(inspirationSelect.value)];
+  if (!source || caught.has(source.seed) || caught.size >= layerLimit) return;
+  stopTracks();
+  audition.pause();
+  stopSuno();
+  const engine = inspirationAudio ??= new UniverseAudio();
+  catchButton.disabled = true;
+  stopButton.hidden = false;
+  try {
+    await engine.start();
+    if (engine !== inspirationAudio) return;
+    const slots = new Set(Array.from(caught.values(), item => item.slot));
+    const slot = Array.from({ length: layerLimit }, (_, index) => index).find(index => !slots.has(index));
+    const item = { ...source, slot, id: ++nextId };
+    caught.set(item.seed, item);
+    engine.capture(item);
+    drawCaught();
+    inspirationStatus.textContent = inspirationSound(item).label + " 합류 · 레이어 " + caught.size + "개";
+  } catch {
+    if (engine !== inspirationAudio) return;
+    stopInspirations();
+    inspirationStatus.textContent = "소리를 켤 수 없어요. 다시 시도해 주세요.";
+  }
+});

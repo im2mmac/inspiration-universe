@@ -1,6 +1,6 @@
 const sounds = {
   depth: ["낮은 북", "심연의 어둠", "Weltschmerz", "Claroscuro", "Memento mori", "사막을 담은 스노볼", "유리 속 산불", "말랑한 행성"],
-  water: ["물방울", "호수의 반짝임", "거친 파도", "물방울", "비를 키우는 화분", "水", "빈 수영장", "접히는 바다", "마지막 파도", "거품 기차"],
+  water: ["물방울", "호수의 반짝임", "거친 파도", "물방울", "비를 키우는 화분", "빈 수영장", "접히는 바다", "마지막 파도", "거품 기차"],
   glass: ["유리의 떨림", "유리잔 속 소용돌이", "수면에 비친 나", "镜花水月", "유리 해파리", "얼음 나비", "물속의 보름달", "나침반 달걀", "金継ぎ"],
   paper: ["종이 마찰", "부치지 못한 편지", "종이배", "Aus dem Rahmen fallen", "Tabula rasa", "종이배 잠수함", "그림자를 접는 가위", "우주 택배 상자", "Negative space"],
   wood: ["나뭇결 타격", "가 보지 않은 길", "빈 의자", "Dejar huella", "侘び寂び", "별을 깎는 연필깎이", "도토리 잠수복", "木漏れ日", "留白", "Gestalt"],
@@ -34,9 +34,7 @@ export function inspirationSound(item) {
   return {
     family, label: sounds[family][0], rate,
     echo: .085 + (seed * 13 % 41) * .003,
-    pattern: item.role === "texture"
-      ? pair.map(step => step + 16)
-      : [...pair, 32 + (code % 13), 48 + (code * 3 % 16)],
+    pattern: [...pair, 32 + (code % 13), 48 + (code * 3 % 16)],
   };
 }
 
@@ -94,8 +92,9 @@ export class InspirationLayers {
       if (!voice) {
         const sound = inspirationSound(item);
         const offset = ((item.slot ?? 0) * 5) % 16;
+        const strengths = item.role === "texture" ? [.74, .38] : [.87, .62];
         const pulses = new Map(sound.pattern.map((pulse, index) =>
-          [pulse - pulse % 16 + (pulse + offset) % 16, index % 2 === 0 ? .87 : .62]
+          [pulse - pulse % 16 + (pulse + offset) % 16, strengths[index % 2]]
         ));
         const gain = this.context.createGain();
         gain.gain.value = level;

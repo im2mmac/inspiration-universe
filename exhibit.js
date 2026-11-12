@@ -1,6 +1,7 @@
 import { UniverseAudio } from "./audio-engine.js";
 import { WristCamera } from "./camera.js";
 import { catalog } from "./items.js";
+import { inspirationSound } from "./inspiration-audio.js";
 
 /* ────────────────────────────────────────────────────────────
    화면 설계 (75인치 16:9 기준, 모든 값은 무대 크기에 대한 비율)
@@ -25,7 +26,7 @@ const PLAYERS = [
 ];
 const ROLE_TINT = { base: "#8fe6ff", melody: "#ffd98a", texture: "#e2bcff" };
 const HAND = [.92, .7];
-const BEAT_MS = 60000 / 92;
+const BEAT_MS = 60000 / 150;
 const APPROACH_MS = 5200;
 const HOVER_MS = 7600;
 const HOLD_RELEASE_MS = 1000;
@@ -413,7 +414,7 @@ function catchItem(floater, player) {
   const index = onScreen.indexOf(floater);
   const slot = slotsList.indexOf(null);
   if (index < 0 || slot < 0) return false;
-  const item = { ...floater.item, player, id: ++session, joinAt: nextBeat() };
+  const item = { ...floater.item, player, slot, id: ++session, joinAt: nextBeat() };
   const previousRole = activeRole();
   selected.add(item.seed);
   slotsList[slot] = item;
@@ -427,7 +428,7 @@ function catchItem(floater, player) {
   warp = 1;
   drawTray(slot);
   drawLayers();
-  status(PLAYERS[player].label + "번 · ‘" + item.name + "’을 낚았어요.");
+  status(PLAYERS[player].label + "번 · " + item.name + " · " + inspirationSound(item).label + " 합류");
   hint("");
   if (selected.size === LIMIT) {
     clearFloaters();
@@ -530,7 +531,7 @@ function drawTray(fresh = -1) {
       cell.style.setProperty("--player", PLAYERS[item.player].color);
       cell.style.setProperty("--tint", ROLE_TINT[item.role]);
       cell.setAttribute("aria-label", PLAYERS[item.player].label + "번 관람객의 " + item.name + " 놓아주기");
-      cell.title = item.name + (item.back ? " · " + item.back : "");
+      cell.title = item.name + (item.back ? " · " + item.back : "") + " · " + inspirationSound(item).label;
       cell.append(thumbnail(item));
       const mark = document.createElement("b");
       mark.textContent = PLAYERS[item.player].label;

@@ -16,8 +16,20 @@
   <div class="listen-heading">
     <h1>사운드 체크</h1>
   </div>
+  <section class="track" aria-labelledby="inspiration-heading">
+    <h2 id="inspiration-heading">영감별 소리 · 150 BPM</h2>
+    <p>영감을 하나씩 낚아 합주를 들어보세요. 낚은 영감을 누르면 그 소리가 빠져요.</p>
+    <div class="suno-transport">
+      <label for="inspiration-select">영감</label>
+      <select id="inspiration-select"></select>
+      <button id="inspiration-catch" type="button">낚기</button>
+    </div>
+    <ul id="inspiration-layers" aria-label="지금 울리는 영감"></ul>
+    <button id="inspiration-stop" type="button" hidden>합주 멈추기</button>
+    <p id="inspiration-status" role="status"></p>
+  </section>
   <section class="track suno-section" id="suno-check" aria-labelledby="suno-heading" hidden>
-    <h2 id="suno-heading">수노 레이어 · 150 BPM</h2>
+    <h2 id="suno-heading">수노 스템 비교 · 150 BPM</h2>
     <p>악기를 켜고 끄며 들어보세요. 고른 곡은 체험판에서도 사용돼요.</p>
     <div class="suno-transport">
       <label for="suno-pack">곡</label>
