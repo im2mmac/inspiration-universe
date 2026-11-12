@@ -31,6 +31,8 @@ const HOVER_MS = 7600;
 const HOLD_RELEASE_MS = 1000;
 const DWELL_CATCH_MS = 900;
 const LIMIT = 15;
+const EMPTY_RESET_MS = 15000;   // 모두 떠난 뒤 이만큼 지나면 다시 빈 우주로
+const REVIEW_RESET_MS = 40000;  // 완성 장면을 들은 뒤 새 우주로
 
 const byId = id => document.getElementById(id);
 const stage = byId("stage");
@@ -58,6 +60,8 @@ let lastSpawn = 0;
 let session = 0;
 let cameraActive = false;
 let presenceSince = 0;
+let emptySince = 0;
+let reviewSince = 0;
 let beatOrigin = performance.now();
 let lastBeat = -1;
 let beatPulse = 0;
@@ -152,7 +156,6 @@ function thumbnail(item) {
 function setState(next) {
   state = next;
   stage.dataset.state = next;
-  byId("opening").hidden = next !== "idle";
   byId("tray").hidden = next === "idle";
   byId("finish").hidden = next !== "review";
 }
@@ -429,6 +432,7 @@ function catchItem(floater, player) {
   if (selected.size === LIMIT) {
     clearFloaters();
     setState("review");
+    reviewSince = performance.now();
     status("15개가 모였어요. 함께 들어보세요. 자기 칸을 꽉 쥐면 영감을 놓아줄 수 있어요.");
   } else if (previousRole !== activeRole()) clearFloaters();
   return true;
@@ -488,8 +492,7 @@ function fly(floater, slot, player) {
 
 function nextBeat() {
   const now = performance.now();
-  const beat = audio.beat?.();
-  if (beat && typeof beat.phase === "number") return now + (1 - beat.phase) * BEAT_MS;
+  if (audio.beat()) return now + audio.nextJoinDelay() * 1000;
   return beatOrigin + Math.ceil((now - beatOrigin) / BEAT_MS) * BEAT_MS;
 }
 
@@ -703,8 +706,9 @@ function moveTracked(tracked, error) {
   const now = performance.now();
   const someone = tracked.some(Boolean);
   if (state === "idle") {
+    // 시작 화면 없이, 사람이 잠깐 머물면 바로 우주인이 나타난다.
     presenceSince = someone ? presenceSince || now : 0;
-    if (someone && now - presenceSince > 1200) { presenceSince = 0; begin(); }
+    if (someone && now - presenceSince > 700) { presenceSince = 0; begin(); }
     return;
   }
   tracked.forEach((pose, player) => {
@@ -851,6 +855,7 @@ function frame(time) {
   interact(time);
   updateActors(time);
   updateFlights(time);
+  housekeeping(time);
   warp = Math.max(0, warp - dt * .0016);
   drawStars(dt);
   drawFx(time, dt);
@@ -881,11 +886,39 @@ function selectPlayer(player) {
   if (state !== "idle" && !cameraActive) join(player);
 }
 
-async function begin() {
-  try {
-    await audio.start();
+function wakeAudio() {
+  audio.start().catch(() => status("소리를 켜려면 화면을 한 번 눌러 주세요."));
+}
+
+function begin() {
+  wakeAudio();
+  startRound();
+}
+
+function resetToIdle() {
+  for (const player of present()) leave(player);
+  clearFloaters();
+  selected.clear();
+  slotsList.fill(null);
+  audio.clear();
+  drawTray();
+  drawLayers();
+  hint("");
+  setState("idle");
+  status("빈 우주로 돌아왔어요. 카메라 앞에 서면 다시 시작해요.");
+}
+
+// 사람이 모두 떠나거나 완성 장면이 끝나면 저절로 처음으로 돌아간다.
+function housekeeping(time) {
+  if (state === "idle" || !cameraActive) { emptySince = 0; return; }
+  if (present().length) emptySince = 0;
+  else if (!emptySince) emptySince = time;
+  else if (time - emptySince > EMPTY_RESET_MS) { emptySince = 0; resetToIdle(); return; }
+  if (state === "review" && time - reviewSince > REVIEW_RESET_MS) {
+    const people = present();
     startRound();
-  } catch { status("소리를 켤 수 없어요. 브라우저에서 다시 시도해 주세요."); }
+    if (cameraActive) for (const player of people) join(player);
+  }
 }
 
 /* ── 이벤트 ───────────────────────────────────────── */
@@ -894,7 +927,6 @@ function pointer(event) {
   return [(event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height];
 }
 
-byId("start").addEventListener("click", begin);
 byId("again").addEventListener("click", startRound);
 byId("players").addEventListener("click", event => {
   const button = event.target.closest("button[data-player]");
@@ -907,6 +939,8 @@ stage.addEventListener("pointermove", event => {
   nets[selectedPlayer].ty = y;
 });
 stage.addEventListener("pointerdown", event => {
+  wakeAudio();
+  if (state === "idle" && !cameraActive) { begin(); return; }
   if (state !== "active" || cameraActive || event.target.closest("button")) return;
   const net = nets[selectedPlayer];
   [net.tx, net.ty] = pointer(event);
@@ -945,9 +979,14 @@ byId("camera").addEventListener("click", async () => {
     cameraActive = false;
     stage.classList.remove("camera-on");
     button.setAttribute("aria-pressed", "false");
-    status("카메라를 껐어요. 마우스로 그물을 움직여 낚으세요.");
+    status("카메라를 껐어요. 화면을 눌러 마우스로 참여하세요.");
     return;
   }
+  await startCamera();
+});
+
+async function startCamera() {
+  const button = byId("camera");
   button.disabled = true;
   status("카메라와 손 인식 모델을 준비하고 있어요.");
   try {
@@ -957,13 +996,14 @@ byId("camera").addEventListener("click", async () => {
     stage.classList.add("camera-on");
     for (const player of present()) leave(player);
     button.setAttribute("aria-pressed", "true");
+    if (state !== "idle") resetToIdle();
     status(tracker.mode === "hand"
-      ? "카메라 준비 완료. 앞에 서면 우주인이 나타나요. 손을 꽉 쥐어 낚으세요. (V: 카메라 미리보기)"
+      ? "카메라 준비 완료. 앞에 서면 우주인이 나타나요. (V: 카메라 미리보기)"
       : "손 모델을 불러오지 못해, 그물을 영감 위에 잠시 머무르면 낚이도록 바꿨어요.");
   } catch (error) {
-    status(error.name === "NotAllowedError" ? "카메라 권한을 확인하거나 마우스로 참여하세요." : "카메라를 켤 수 없어요. 마우스로 참여하세요.");
+    status(error.name === "NotAllowedError" ? "카메라 권한을 허용하거나 화면을 눌러 마우스로 참여하세요." : "카메라를 켤 수 없어요. 화면을 눌러 마우스로 참여하세요.");
   } finally { button.disabled = false; }
-});
+}
 byId("save").addEventListener("click", async () => {
   const button = byId("save");
   button.disabled = true;
@@ -985,3 +1025,6 @@ setState("idle");
 drawTray();
 for (let i = 0; i < 5; i += 1) spawn(performance.now(), true);
 requestAnimationFrame(frame);
+// 전시 PC에서는 페이지가 열리면 바로 카메라와 소리를 켠다 (권한을 한 번 허용해 두면 다음부터 묻지 않는다).
+wakeAudio();
+if (new URLSearchParams(location.search).get("camera") !== "off") startCamera();

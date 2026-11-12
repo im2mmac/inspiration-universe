@@ -119,6 +119,12 @@ footer a { text-decoration: underline; }
 .track p { font-size: .88rem; margin: .45rem 0 .65rem; }
 .track span { white-space: nowrap; font-size: .82rem; }
 .track audio { display: block; width: 100%; }
+.sound-set-label { margin: 1.45rem 0 .55rem; color: var(--muted); font-size: .9rem; font-weight: 600; }
+.track .suno-transport { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .55rem; }
+.suno-transport select { min-width: 0; font: inherit; font-size: .88rem; color: var(--ink); background: #0f172c; border: 1px solid var(--line); border-radius: 6px; padding: .45rem; }
+#suno-tracks { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin: .7rem 0 0; padding: .4rem .65rem .65rem; border: 1px solid var(--line); border-radius: 6px; }
+#suno-tracks label, #suno-tracks legend { font-size: .84rem; }
+#suno-tracks input { accent-color: #f1d39b; }
 .track a { display: inline-flex; padding-top: .65rem; color: #f1d39b; text-decoration: underline; font-size: .84rem; }
 @media (max-width: 620px) {
   .stage { aspect-ratio: 5 / 6; min-height: 355px; max-height: 72vh; }

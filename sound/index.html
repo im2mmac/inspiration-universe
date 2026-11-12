@@ -15,8 +15,19 @@
 <main class="listen">
   <div class="listen-heading">
     <h1>사운드 체크</h1>
-    <p>오가닉 앰비언트 · 92 BPM · 4/4 · 시안 0.2</p>
   </div>
+  <section class="track suno-section" id="suno-check" aria-labelledby="suno-heading" hidden>
+    <h2 id="suno-heading">수노 레이어 · 150 BPM</h2>
+    <p>악기를 켜고 끄며 들어보세요. 고른 곡은 체험판에서도 사용돼요.</p>
+    <div class="suno-transport">
+      <label for="suno-pack">곡</label>
+      <select id="suno-pack"></select>
+      <button id="suno-play" type="button">듣기</button>
+    </div>
+    <fieldset id="suno-tracks"><legend>레이어</legend></fieldset>
+    <p id="suno-status" role="status"></p>
+  </section>
+  <h2 class="sound-set-label">오가닉 앰비언트 · 92 BPM</h2>
   <section class="track">
     <div><h2>심연 → 호수</h2><span>24초</span></div>
     <p>8초 전후에 유리음이 들어오며 낮은 울림이 잠시 비켜납니다.</p>

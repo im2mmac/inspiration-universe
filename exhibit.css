@@ -279,9 +279,6 @@
 }
 .stage .finish-actions { display: flex; gap: 1cqw; }
 
-/* 시작 화면 뒤의 영감은 한 걸음 물러나 있다 */
-.stage[data-state="idle"] .floaters { opacity: .55; }
-
 /* 설치 점검용 카메라 미리보기 (키보드 V) */
 .stage .camera-feed {
   display: none; position: absolute; right: 1.2cqw; top: 1.2cqw; z-index: 10; width: 18cqw;
