@@ -541,6 +541,14 @@ function nextBeat() {
 }
 
 // 낚은 영감은 별가루가 되어 우주 배경에 성운처럼 떠 있는다 (art-particles.js)
+// 배경 영감의 또렷함: 낚은 직후 1 → 15초쯤 지나며 옅어짐. 가장 최근 것은 조금 더 남는다
+function artFresh(item, now, rank) {
+  const age = Math.max(0, now - (item.joinAt || 0));
+  const fade = Math.exp(-age / 14000);
+  const floor = rank === 0 ? .32 : rank < 3 ? .14 : .07;
+  return Math.max(floor, fade);
+}
+
 // 배경 아트는 세 가지 결로 섞인다: 조각(모자이크로 부서졌다 모임), 잉크(물에 번짐), 별가루(입자 성운)
 const ART_STYLES = ["shard", "ink", "dust"];
 function artStyle(item) { return ART_STYLES[(item.seed + item.slot) % 3]; }
@@ -1047,7 +1055,14 @@ function frame(time) {
   drawStars(dt);
   drawFx(time, dt);
   const energy = Math.min(.85, audio.energy() * 2);
-  artField.draw(time, { energy, beat: beatPulse, state });
+  // 막 낚은 영감은 또렷하게, 시간이 지나고 다음 영감이 올수록 옅어진다
+  const ranks = new Map(slotsList.filter(Boolean).sort((x, y) => y.id - x.id).map((item, i) => [item.id, i]));
+  const fresh = item => artFresh(item, time, ranks.get(item.id) ?? 9);
+  artField.draw(time, { energy, beat: beatPulse, state, fresh });
+  for (const ghost of byId("art-layers").children) {
+    const item = slotsList.find(it => it && String(it.id) === ghost.dataset.item);
+    if (item) ghost.style.setProperty("--vis", (fresh(item) * .6).toFixed(3));
+  }
   stage.style.setProperty("--energy", energy.toFixed(2));
   requestAnimationFrame(frame);
 }
@@ -1159,9 +1174,10 @@ function planConstellation(items) {
     edges.push(pick);
   }
   const now = new Date();
-  const name = anonymousName(rand);
-  const label = now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) + " · " + pickMood() + " " + name;
-  return { c: center, p: points, e: edges, label, name, t: now.getTime() };
+  const people = new Set(items.map(item => item.player)).size;
+  const { title, names } = crewName(people, rand);
+  const label = now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) + " · " + title;
+  return { c: center, p: points, e: edges, label, name: names[0], names, t: now.getTime() };
 }
 
 // 구글 문서의 "익명의 고릴라"처럼, 오늘 하늘에서 겹치지 않는 동물 이름
@@ -1169,6 +1185,37 @@ function planConstellation(items) {
 const MOODS = ["익명의", "익명의", "세상 귀여운", "피곤한", "졸린", "신나는", "수줍은", "배고픈", "꿈꾸는", "들뜬",
   "느긋한", "반짝이는", "용감한", "엉뚱한", "다정한", "춤추는", "노래하는", "길 잃은", "호기심 많은", "설레는",
   "멍때리는", "콧노래 부르는", "살짝 삐진", "행복한", "부끄러운", "떠돌이", "잠 못 드는", "우주를 걷는"];
+// 받침이 있으면 "과", 없으면 "와"
+function withAnd(word) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return word + (code >= 0 && code < 11172 && code % 28 ? "과" : "와");
+}
+
+// 함께한 사람 수에 맞는 별자리 이름
+//  1명: 졸린 수달 / 2명: 졸린 수달과 신나는 펭귄 · 신나는 펭귄 둘 · 수줍은 고래들
+//  3명: 졸린 수달, 신나는 펭귄과 수줍은 고래 · 들뜬 여우 셋 · 꿈꾸는 해달들
+function crewName(people, rand) {
+  const first = anonymousName(rand);
+  if (people <= 1) return { title: pickMood() + " " + first, names: [first] };
+  if (Math.random() < .5) {
+    const names = [first];
+    while (names.length < people) names.push(anonymousName(rand, names));
+    const moods = [];
+    for (const _ of names) {
+      const pool = MOODS.filter(m => m !== "익명의" || !moods.includes(m)).filter(m => !moods.includes(m));
+      moods.push(pool[Math.floor(Math.random() * pool.length)]);
+    }
+    const parts = names.map((n, i) => moods[i] + " " + n);
+    const title = parts.length === 2
+      ? withAnd(parts[0]) + " " + parts[1]
+      : parts.slice(0, -2).join(", ") + (parts.length > 2 ? ", " : "") + withAnd(parts.at(-2)) + " " + parts.at(-1);
+    return { title, names };
+  }
+  const count = ["", "", "둘", "셋"][people] || "";
+  const plural = Math.random() < .5 && count ? " " + count : "들";
+  return { title: pickMood() + " " + first + plural, names: [first] };
+}
+
 function pickMood() {
   const last = constellations.slice(-3).map(k => k.label);
   const pool = MOODS.filter(m => !last.some(l => l?.includes(" " + m + " ")));
@@ -1177,8 +1224,8 @@ function pickMood() {
 const ANIMALS = ["고래", "수달", "펭귄", "여우", "부엉이", "판다", "고양이", "토끼", "해달", "다람쥐",
   "코알라", "기린", "고슴도치", "너구리", "알파카", "돌고래", "거북이", "치타", "나무늘보", "북극곰",
   "카멜레온", "플라밍고", "해마", "미어캣", "라쿤", "두더지", "앵무새", "고릴라", "캥거루", "오리너구리"];
-function anonymousName(rand) {
-  const used = new Set(constellations.map(k => k.name));
+function anonymousName(rand, taken = []) {
+  const used = new Set([...constellations.flatMap(k => k.names || [k.name]), ...taken]);
   const free = ANIMALS.filter(a => !used.has(a));
   const pool = free.length ? free : ANIMALS;
   return pool[Math.floor(rand() * pool.length) % pool.length];

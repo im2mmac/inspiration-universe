@@ -227,7 +227,7 @@ export class ArtField {
     return [.5 + radius * Math.cos(angle), .36 + radius * .62 * Math.sin(angle)];
   }
 
-  draw(time, { energy = 0, beat = 0, state = "active" } = {}) {
+  draw(time, { energy = 0, beat = 0, state = "active", fresh = () => 1 } = {}) {
     const { ctx, w, h, dpr } = this;
     // 프레임 간격이 달라도 같은 속도로 움직이게
     const step = Math.min(4, (time - (this.last ?? time)) / 16.7 || 1);
@@ -252,7 +252,9 @@ export class ArtField {
       const trip = this.voyage(entity, time);
       const o = this.orient(entity, time);
       const scatter = Math.max(trip.dissolve * (.8 + energy * .4), (wave < .62 ? 0 : Math.pow((wave - .62) / .38, 1.6)) * .35);
-      const alpha = this.visibility * fade * trip.show * (entity.item.kind === "image" ? .62 : .72);
+      // 막 낚은 것은 또렷하게, 오래된 것은 옅게
+      if (!entity.dying) entity.fresh = fresh(entity.item);
+      const alpha = this.visibility * fade * trip.show * (entity.fresh ?? 1) * (entity.item.kind === "image" ? .7 : .8);
       if (entity.ink) {
         this.drawInk(entity, { time, age, cx, cy, span: span * trip.grow, wave, alpha, energy, beat, step, o, trip });
         continue;
