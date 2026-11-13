@@ -839,12 +839,12 @@ function moveTracked(tracked, error) {
   const now = performance.now();
   let restartProgress = 0;
   restartGestures.forEach((gesture, player) => {
-    if (state !== "review" || now - reviewSince < 2500) gesture.reset();
+    if (state !== "review" || now - reviewSince < 800) gesture.reset();
     else restartProgress = Math.max(restartProgress, gesture.update(tracked[player], now));
   });
   byId("restart-progress").value = restartProgress;
   byId("restart-gesture-text").textContent = restartProgress > 0
-    ? "좋아요, 양팔을 조금 더 흔들어 주세요"
+    ? "양팔이 보여요! 두 손을 두세 번 흔들어 주세요"
     : "새로 시작하려면 양팔을 머리 위로 들고 좌우로 흔들어 주세요";
   if (restartProgress >= 1) {
     restartGestures.forEach(gesture => gesture.reset());
