@@ -34,8 +34,7 @@ const APPROACH_MS = 5200;
 const HOVER_MS = 7600;
 const HOLD_RELEASE_MS = 1000;
 const DWELL_CATCH_MS = 900;
-const WAVE_MIN = .025;           // 왼손 흔들기: 이만큼(화면 폭 비율) 움직여야 한 번으로 센다
-const WAVES_TO_ERASE = 3;        // 방향이 3번 바뀌면(좌우로 두 번 넘게 흔들면) 지운다
+const FIST_MS = 350;             // 왼손 지우개를 내 칸에 붙인 채 주먹을 쥐고 있는 시간
 const LIMIT = 15;
 const EMPTY_RESET_MS = 15000;   // 모두 떠난 뒤 이만큼 지나면 다시 빈 우주로
 const REVIEW_RESET_MS = 40000;  // 완성 장면을 들은 뒤 새 우주로
@@ -513,7 +512,7 @@ function catchItem(floater, player) {
     clearFloaters();
     setState("review");
     reviewSince = performance.now();
-    status("15개가 모였어요. 함께 들어보세요. 왼손 손바닥을 보이며 내 칸 가까이에서 좌우로 흔들면 영감을 놓아줄 수 있어요.");
+    status("15개가 모였어요. 함께 들어보세요. 왼손을 펴서 내 칸에 가까이 가 주먹을 쥐면 영감을 놓아줄 수 있어요.");
   } else if (previousRole !== activeRole()) clearFloaters();
   return true;
 }
@@ -882,8 +881,12 @@ function moveTracked(tracked, error) {
       net.closed = !!pose.closed;
     } else net.closed = false;
     // 왼손을 펴면 지우개가 나타나 왼손을 따라간다.
-    const open = pose.leftPalm && pose.leftGrip !== null && pose.leftGrip < .4;
-    if (open) {
+    // 왼손을 펴면 지우개가 나타나고, 내 칸에 붙은 채로 주먹을 쥐면 지운다
+    const leftSeen = pose.leftPalm && pose.leftGrip !== null;
+    const open = leftSeen && pose.leftGrip < .4;
+    const fist = leftSeen && pose.leftGrip > .62;
+    eraser.fist = !!(fist && eraser.on);
+    if (open || eraser.fist) {
       const rx = (pose.leftPalm[0] - pose.leftShoulder[0]) * (4 / 3) / pose.span;
       const ry = (pose.leftPalm[1] - pose.leftShoulder[1]) / pose.span;
       // 그물보다 크게 움직여서, 손을 내리면 아래 수집 칸까지 쉽게 닿게
@@ -892,7 +895,7 @@ function moveTracked(tracked, error) {
       if (!eraser.on) { eraser.x = tx; eraser.y = ty; }
       eraser.tx = tx; eraser.ty = ty;
     }
-    eraser.on = !!open;
+    eraser.on = !!(open || eraser.fist);
   });
   separateActors();
 }
@@ -971,7 +974,7 @@ function interact(time) {
   }
 }
 
-// 왼손 손바닥을 펴고 내 칸에 가까이 가서 좌우로 두 번 넘게 흔들면 그 영감을 놓아준다.
+// 왼손 손바닥을 펴고 내 칸에 가까이 가서 주먹을 쥐면 그 영감을 놓아준다.
 function erase(player, time, trayCells, bounds) {
   const eraser = erasers[player];
   const dt = Math.min(50, time - (eraser.last || time));
@@ -1007,17 +1010,12 @@ function erase(player, time, trayCells, bounds) {
   if (eraser.slot !== index) { eraser.slot = index; resetWave(eraser); eraser.anchor = eraser.tx; }
   eraser.anchor = lerp(eraser.anchor ?? eraser.tx, eraser.tx, .04);
 
-  // 좌우 흔들기 세기: 방향이 바뀔 때마다 1번. 일정 폭 이상 움직여야 센다
-  const dx = eraser.tx - (eraser.wx ?? eraser.tx);
-  if (Math.abs(dx) > WAVE_MIN) {
-    const dir = Math.sign(dx);
-    if (eraser.dir && dir !== eraser.dir) { eraser.waves += 1; eraser.lastWave = time; eraserSparkle(eraser); }
-    eraser.dir = dir;
-    eraser.wx = eraser.tx;
-  }
-  if (eraser.wx === undefined) eraser.wx = eraser.tx;
-  if (eraser.waves && time - eraser.lastWave > 1400) { eraser.waves = 0; eraser.dir = 0; } // 멈추면 다시 처음부터
-  const progress = clamp(eraser.waves / WAVES_TO_ERASE, 0, 1);
+  // 주먹을 쥐고 잠깐(0.35초) 유지하면 지운다. 진행은 칸 테두리로 보여 준다
+  if (eraser.fist) eraser.squeeze = (eraser.squeeze || 0) + dt;
+  else eraser.squeeze = Math.max(0, (eraser.squeeze || 0) - dt * 2);
+  const progress = clamp(eraser.squeeze / FIST_MS, 0, 1);
+  if (eraser.fist && !eraser.sparkled) { eraserSparkle(eraser); eraser.sparkled = true; }
+  if (!eraser.fist) eraser.sparkled = false;
   trayCells[index].style.setProperty("--hold", progress);
   trayCells[index].classList.add("holding");
   if (progress >= 1) {
@@ -1026,7 +1024,7 @@ function erase(player, time, trayCells, bounds) {
   }
 }
 
-function resetWave(eraser) { eraser.waves = 0; eraser.dir = 0; eraser.wx = undefined; eraser.rub = 0; }
+function resetWave(eraser) { eraser.squeeze = 0; eraser.sparkled = false; eraser.rub = 0; }
 function eraserSparkle(eraser) {
   for (let i = 0; i < 8; i += 1) {
     particles.push({ x: eraser.x * size.w, y: eraser.y * size.h, vx: (Math.random() - .5) * 4, vy: -Math.random() * 3, life: .9, decay: .03, size: 2 + Math.random() * 2, color: "#ffd9e6", drag: .95 });
