@@ -2,6 +2,7 @@ import { UniverseAudio } from "./audio-engine.js";
 import { WristCamera } from "./camera.js";
 import { catalog } from "./items.js";
 import { layerCode } from "./audio-engine.js";
+import { SONGS } from "./music-catalog.js";
 
 /* ────────────────────────────────────────────────────────────
    화면 설계 (75인치 16:9 기준, 모든 값은 무대 크기에 대한 비율)
@@ -287,6 +288,15 @@ function spawn(time, initial = false) {
   const want = images * 2 < onScreen.length ? "image" : Math.random() < .55 ? "word" : "image";
   const kind = pool.filter(item => item.kind === want);
   if (kind.length) pool = kind;
+  // 바탕 곡 분위기에 어울리는 영감이 먼저 떠오른다. 처음엔 거의 다, 쌓일수록 다양하게.
+  const mood = SONGS.find(song => song.id === audio.base)?.mood;
+  let fit = mood ? pool.filter(item => item.mood?.includes(mood)) : [];
+  // 그 역할에 어울리는 영감이 너무 적으면(예: 리듬 곡의 base) 역할을 넓혀서 분위기를 우선한다.
+  if (mood && fit.length < 3) {
+    fit = catalog.filter(item => !selected.has(item.seed) && !busy.has(item.seed) && item.mood?.includes(mood));
+  }
+  const lean = selected.size < 4 ? .9 : selected.size < 10 ? .7 : .5;
+  if (fit.length && Math.random() < lean) pool = fit;
   const item = pool[Math.floor(Math.random() * pool.length)];
   const button = document.createElement("button");
   button.type = "button";

@@ -7,7 +7,7 @@ export const LOOP_SECONDS = LOOP_BARS * 4 * 60 / BPM;
 
 export const SONGS = [
   {
-    "id": "s1",
+    "id": "s1", "mood": "space",
     "title": "우주 시네마틱",
     "key": "G minor",
     "gain": 0.955,
@@ -24,7 +24,7 @@ export const SONGS = [
     ]
   },
   {
-    "id": "s2",
+    "id": "s2", "mood": "sea",
     "title": "여름 바닷가 오케스트라",
     "key": "E♭ major",
     "gain": 1.641,
@@ -38,7 +38,7 @@ export const SONGS = [
     ]
   },
   {
-    "id": "s3",
+    "id": "s3", "mood": "dream",
     "title": "물속의 꿈",
     "key": "C major",
     "gain": 0.871,
@@ -51,7 +51,7 @@ export const SONGS = [
     ]
   },
   {
-    "id": "s4",
+    "id": "s4", "mood": "groove",
     "title": "별빛 그루브",
     "key": "C minor",
     "gain": 1.245,
@@ -63,7 +63,7 @@ export const SONGS = [
     ]
   },
   {
-    "id": "s5",
+    "id": "s5", "mood": "love",
     "title": "설레는 첫사랑",
     "key": "G major",
     "gain": 1.012,
@@ -79,7 +79,7 @@ export const SONGS = [
     ]
   },
   {
-    "id": "s10",
+    "id": "s10", "mood": "joy",
     "title": "기쁨의 원",
     "key": "G major",
     "gain": 1.035,

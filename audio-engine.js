@@ -51,12 +51,16 @@ export function layerFromCode(code) {
 }
 
 // 영감 하나에 어떤 악기 줄을 붙일지 정한다. 같은 상황이면 같은 결과가 나온다.
-export function chooseLayer(item, active, take) {
+// heard: 이번 회차에 이미 울렸던 악기(놓아준 것 포함). 아직 안 나온 악기를 먼저 고르고,
+// 방금 놓아준 악기는 다른 선택지가 하나도 없을 때만 다시 쓴다.
+export function chooseLayer(item, active, take, heard = []) {
   const base = SONGS[songIndex(take)];
   const used = new Set(active);
-  const pick = list => {
-    const free = list.filter(layer => !used.has(layer));
-    return free.length ? free[(item.seed * 7 + active.length) % free.length] : null;
+  const seen = new Set(heard);
+  const recent = heard[heard.length - 1];
+  const pickFrom = (list, allowSeen) => {
+    const free = list.filter(layer => !used.has(layer) && (allowSeen ? layer !== recent : !seen.has(layer)));
+    return free.length ? free[(item.seed * 7 + active.length + heard.length) % free.length] : null;
   };
   const own = kinds => base.stems.filter(stem => kinds.includes(KIND[stem])).map(stem => base.id + "/" + stem);
   const borrowedRhythm = SONGS.filter(song => song !== base)
@@ -75,12 +79,19 @@ export function chooseLayer(item, active, take) {
     melody: [own(["harmony", "lead"]), friendly, own(["low", "rhythm"]), echoes, rhythmOk],
     texture: [rhythmOk, friendly, own(["lead", "harmony"]), echoes, own(["low", "rhythm"])],
   };
-  for (const list of plans[item.role] || plans.texture) {
-    const layer = pick(list);
+  const tiers = plans[item.role] || plans.texture;
+  const everything = [...own(["low", "rhythm", "harmony", "lead"]), ...friendly, ...borrowedRhythm, ...echoes];
+  // 1) 역할에 맞으면서 아직 안 나온 악기 → 2) 어디서든 아직 안 나온 악기 → 3) 방금 놓은 것만 빼고 다시
+  for (const allowSeen of [false, true]) {
+    for (const list of tiers) {
+      const layer = pickFrom(list, allowSeen);
+      if (layer) return layer;
+    }
+    const layer = pickFrom(everything, allowSeen);
     if (layer) return layer;
   }
-  return pick([...own(["low", "rhythm", "harmony", "lead"]), ...friendly, ...borrowedRhythm, ...echoes])
-    || base.id + "/" + base.stems[item.seed % base.stems.length] + "~e";
+  const free = everything.filter(layer => !used.has(layer));
+  return free[0] || base.id + "/" + base.stems[item.seed % base.stems.length] + "~e";
 }
 
 function mixBus(context, level = MASTER) {
@@ -153,6 +164,7 @@ export class UniverseAudio {
     this.fixedTake = take !== undefined;
     this.voices = new Map();   // item.id → voice
     this.active = [];          // 지금 울리는 층 (선택 순서)
+    this.heard = [];           // 이번 회차에 울렸던 층 (놓아준 것 포함)
     this.muted = false;
     this.origin = null;
   }
@@ -206,10 +218,11 @@ export class UniverseAudio {
   // 낚기: 층을 정하고 바로 차오르게 한다. item.layer, item.soundLabel을 채운다.
   capture(item) {
     if (!this.context) this.initialize();
-    const layer = item.layer || chooseLayer(item, this.active, this.take);
+    const layer = item.layer || chooseLayer(item, this.active, this.take, this.heard);
     item.layer = layer;
     item.soundLabel = layerLabel(layer, this.base);
     this.active.push(layer);
+    this.heard = [...this.heard.filter(h => h !== layer), layer];
     const context = this.context;
     void loadStem(context, layer).then(buffer => {
       if (!this.active.includes(layer) || this.voices.has(item.id) || this.closed) return;
@@ -230,6 +243,8 @@ export class UniverseAudio {
   release(item) {
     const index = this.active.indexOf(item.layer);
     if (index >= 0) this.active.splice(index, 1);
+    // 방금 놓아준 악기를 기록 맨 뒤로: 다음 낚기에서 가장 늦게 다시 고른다
+    if (item.layer) this.heard = [...this.heard.filter(h => h !== item.layer), item.layer];
     const v = this.voices.get(item.id);
     this.voices.delete(item.id);
     if (!v || !this.context) return;
@@ -253,6 +268,7 @@ export class UniverseAudio {
     }
     this.voices.clear();
     this.active = [];
+    this.heard = [];
     this.origin = null;
     if (!this.fixedTake) {
       this.take = nextArrangement(this.take);
