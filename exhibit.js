@@ -47,6 +47,33 @@ const fx = byId("fx");
 const starsCanvas = byId("stars");
 const artField = new ArtField(byId("art"));
 const audio = new UniverseAudio();
+const soundNotices = PLAYERS.map((player, index) => {
+  const notice = document.createElement("div");
+  notice.className = "sound-notice";
+  notice.style.setProperty("--notice-player", player.color);
+  notice.style.left = (index * 32 + 2) + "%";
+  notice.setAttribute("role", "status");
+  stage.append(notice);
+  return notice;
+});
+function announceSound(item, phase) {
+  const notice = soundNotices[item.player];
+  clearTimeout(notice.hideTimer);
+  notice.textContent = PLAYERS[item.player].label + "번 · " + item.name + " → " +
+    (phase === "loading" ? "소리 준비 중" : phase === "error" ? "소리 연결 실패 · 다시 낚아 주세요" : (item.soundLabel || "새 악기") + " 합류");
+  notice.dataset.item = item.id;
+  notice.classList.add("visible");
+  notice.hideTimer = setTimeout(() => notice.classList.remove("visible"), phase === "loading" ? 10000 : 4000);
+}
+audio.onLayerState = (item, phase) => {
+  if (slotsList[item.slot]?.id !== item.id) return;
+  const cell = slots.children[item.slot];
+  if (phase === "playing" && cell) {
+    cell.classList.add("sound-arrived");
+    setTimeout(() => cell.classList.remove("sound-arrived"), 4000);
+  }
+  if (soundNotices[item.player].dataset.item === String(item.id)) announceSound(item, phase);
+};
 const tracker = new WristCamera(byId("camera-feed"), moveTracked);
 
 const selected = new Set();
@@ -463,6 +490,7 @@ function catchItem(floater, player) {
   nets[player].caught += 1;
   actors[player].hop = 1;
   const change = audio.capture(item);
+  announceSound(item, "loading");
   burst(floater.x, floater.y, PLAYERS[player].color, ROLE_TINT[item.role]);
   fly(floater, slot, player);
   removeFloater(index);
@@ -504,6 +532,10 @@ function release(index, player) {
   selected.delete(item.seed);
   slotsList[index] = null;
   audio.release(item);
+  if (soundNotices[player].dataset.item === String(item.id)) {
+    clearTimeout(soundNotices[player].hideTimer);
+    soundNotices[player].classList.remove("visible");
+  }
   drawTray();
   drawLayers();
   if (state === "review") setState("active");
@@ -1100,6 +1132,11 @@ function begin() {
 }
 
 function resetToIdle() {
+  for (const notice of soundNotices) {
+    clearTimeout(notice.hideTimer);
+    notice.classList.remove("visible");
+    delete notice.dataset.item;
+  }
   for (const player of present()) leave(player);
   clearFloaters();
   selected.clear();

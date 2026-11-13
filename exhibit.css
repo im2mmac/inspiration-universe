@@ -434,3 +434,14 @@
 
 /* 영감의 성운: 낚은 영감이 별가루가 되어 떠 있는 캔버스 (art-particles.js) */
 .stage .art-canvas { z-index: 2; mix-blend-mode: screen; }
+
+.stage .sound-notice {
+  position: absolute; top: 4%; width: 30%; z-index: 15;
+  box-sizing: border-box; padding: .65cqw 1cqw;
+  border-left: 2px solid var(--notice-player); border-radius: .4cqw;
+  background: #111a2bd9; color: #fff4df; font-size: 1.05cqw;
+  line-height: 1.6; opacity: 0; transition: opacity .25s;
+  pointer-events: none;
+}
+.stage .sound-notice.visible { opacity: 1; }
+.stage .slot.sound-arrived { box-shadow: 0 0 1.2cqw var(--player), inset 0 0 .6cqw var(--player); }

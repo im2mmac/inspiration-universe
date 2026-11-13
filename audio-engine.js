@@ -271,10 +271,10 @@ function balanceVoices(voices, at, fresh = null, beat = BEAT) {
       }
       if (v === fresh) {
         // 들어온 순간부터 두 마디는 조금 크게, 그다음 제자리로
-        v.gain.gain.setValueAtTime(v.level * 1.1, at + .01);
-        v.gain.gain.setValueAtTime(v.level * 1.1, at + 2 * BAR);
+        v.gain.gain.linearRampToValueAtTime(v.level * 1.18, at + .08);
+        v.gain.gain.setValueAtTime(v.level * 1.18, at + 2 * BAR);
         v.gain.gain.linearRampToValueAtTime(v.level * weight, at + 2 * BAR + BEAT);
-      } else if (v.weight !== weight) {
+      } else {
         v.gain.gain.cancelScheduledValues(at);
         v.gain.gain.setTargetAtTime(v.level * weight, at, .35);
         v.filter.frequency.cancelScheduledValues(at);
@@ -282,7 +282,8 @@ function balanceVoices(voices, at, fresh = null, beat = BEAT) {
       }
       // 새 악기가 들어오는 두 마디 동안 나머지는 살짝 물러나 자리를 내준다
       if (fresh && v !== fresh) {
-        v.gain.gain.setTargetAtTime(v.level * weight * .72, at, .15);
+        const space = v.kind === "rhythm" || v.kind === "low" ? .85 : .5;
+        v.gain.gain.setTargetAtTime(v.level * weight * space, at, .12);
         v.gain.gain.setTargetAtTime(v.level * weight, at + 2 * BAR, .5);
       }
       v.weight = weight;
@@ -406,7 +407,12 @@ export class UniverseAudio {
       v.gain.gain.linearRampToValueAtTime(v.level, arrive);
       this.voices.set(item.id, v);
       this.rebalance(arrive, v);
-    }).catch(() => {});
+      setTimeout(() => {
+        if (this.voices.get(item.id) === v && !this.closed) this.onLayerState?.(item, "playing");
+      }, Math.max(0, (arrive - context.currentTime) * 1000));
+    }).catch(() => {
+      if (this.items.get(item.id) === item && item.layer === layer && !this.closed) this.onLayerState?.(item, "error");
+    });
   }
 
   // 새로 들어온 악기가 들리게: 두 마디 동안 앞으로 나오고,
