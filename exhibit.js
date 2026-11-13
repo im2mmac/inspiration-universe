@@ -1064,7 +1064,9 @@ function housekeeping(time) {
 }
 
 /* ── 엔딩: 15개 영감이 하늘로 올라가 별자리가 되고, 그날의 하늘에 남는다 ── */
-const SKY_KEY = "inspiration-universe-sky-" + new Date().toLocaleDateString("sv");
+// v2: 이전에 쌓인 별자리는 비우고 새로 시작
+const SKY_KEY = "inspiration-universe-sky2-" + new Date().toLocaleDateString("sv");
+const SKY_SHOWN = 8; // 하늘에 동시에 보이는 별자리 수
 let constellations = [];
 try { constellations = JSON.parse(localStorage.getItem(SKY_KEY) || "[]"); } catch {}
 
@@ -1111,8 +1113,20 @@ function planConstellation(items) {
     edges.push(pick);
   }
   const now = new Date();
-  const label = (now.getMonth() + 1) + "월 " + now.getDate() + "일 " + now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) + "의 별자리";
-  return { c: center, p: points, e: edges, label, t: now.getTime() };
+  const name = anonymousName(rand);
+  const label = now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) + " · 익명의 " + name;
+  return { c: center, p: points, e: edges, label, name, t: now.getTime() };
+}
+
+// 구글 문서의 "익명의 고릴라"처럼, 오늘 하늘에서 겹치지 않는 동물 이름
+const ANIMALS = ["고래", "수달", "펭귄", "여우", "부엉이", "판다", "고양이", "토끼", "해달", "다람쥐",
+  "코알라", "기린", "고슴도치", "너구리", "알파카", "돌고래", "거북이", "치타", "나무늘보", "북극곰",
+  "카멜레온", "플라밍고", "해마", "미어캣", "라쿤", "두더지", "앵무새", "고릴라", "캥거루", "오리너구리"];
+function anonymousName(rand) {
+  const used = new Set(constellations.map(k => k.name));
+  const free = ANIMALS.filter(a => !used.has(a));
+  const pool = free.length ? free : ANIMALS;
+  return pool[Math.floor(rand() * pool.length) % pool.length];
 }
 
 function constellationSvg(k, fresh) {
@@ -1148,7 +1162,7 @@ function constellationSvg(k, fresh) {
 function drawSky() {
   const svg = byId("sky-constellations");
   if (!svg) return;
-  const list = constellations.slice(-40);
+  const list = constellations.slice(-SKY_SHOWN);
   svg.replaceChildren(...list.map((k, i) => {
     const g = constellationSvg(k, false);
     g.style.setProperty("--age", (list.length - 1 - i) / Math.max(1, list.length));
