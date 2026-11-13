@@ -4,6 +4,7 @@ import { ArtField } from "./art-particles.js";
 import { catalog } from "./items.js";
 import { layerCode } from "./audio-engine.js";
 import { SONGS } from "./music-catalog.js";
+import { RestartGesture } from "./restart-gesture.js";
 
 /* ────────────────────────────────────────────────────────────
    화면 설계 (75인치 16:9 기준, 모든 값은 무대 크기에 대한 비율)
@@ -75,6 +76,7 @@ audio.onLayerState = (item, phase) => {
   if (soundNotices[item.player].dataset.item === String(item.id)) announceSound(item, phase);
 };
 const tracker = new WristCamera(byId("camera-feed"), moveTracked);
+const restartGestures = PLAYERS.map(() => new RestartGesture());
 
 const selected = new Set();
 const slotsList = Array.from({ length: LIMIT }, () => null);
@@ -213,6 +215,9 @@ function drawQr() {
 }
 
 function setState(next) {
+  restartGestures.forEach(gesture => gesture.reset());
+  byId("restart-progress").value = 0;
+  byId("restart-gesture-text").textContent = "새로 시작하려면 양팔을 머리 위로 들고 좌우로 흔들어 주세요";
   if (next === "review") drawQr();
   state = next;
   stage.dataset.state = next;
@@ -819,6 +824,7 @@ function updateFlights(time) {
 /* ── 입력: 카메라 ──────────────────────────────────── */
 function moveTracked(tracked, error) {
   if (error) {
+    restartGestures.forEach(gesture => gesture.reset());
     cameraActive = false;
     byId("camera").setAttribute("aria-pressed", "false");
     stage.classList.remove("camera-on");
@@ -826,6 +832,20 @@ function moveTracked(tracked, error) {
     return;
   }
   const now = performance.now();
+  let restartProgress = 0;
+  restartGestures.forEach((gesture, player) => {
+    if (state !== "review" || now - reviewSince < 2500) gesture.reset();
+    else restartProgress = Math.max(restartProgress, gesture.update(tracked[player], now));
+  });
+  byId("restart-progress").value = restartProgress;
+  byId("restart-gesture-text").textContent = restartProgress > 0
+    ? "좋아요, 양팔을 조금 더 흔들어 주세요"
+    : "새로 시작하려면 양팔을 머리 위로 들고 좌우로 흔들어 주세요";
+  if (restartProgress >= 1) {
+    restartGestures.forEach(gesture => gesture.reset());
+    ascend();
+    return;
+  }
   const someone = tracked.some(Boolean);
   if (state === "idle") {
     // 시작 화면 없이, 사람이 잠깐 머물면 바로 우주인이 나타난다.

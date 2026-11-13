@@ -286,6 +286,12 @@
 .stage .finish-actions { display: flex; gap: .5cqw; }
 .stage .finish-actions button { font-size: .85cqw; padding: .35cqw .9cqw; border-radius: 99px; opacity: .65; }
 .stage.camera-on .finish-actions { display: none; }
+.restart-gesture-guide { display: none; width: 100%; min-width: 0; text-align: center; color: #f2dfb9; }
+.stage.camera-on .restart-gesture-guide { display: grid; justify-items: center; gap: .3cqw; }
+.restart-gesture-guide svg { width: 4cqw; height: 2.6cqw; }
+.restart-gesture-guide p { margin: 0; font-size: 1.1cqw; line-height: 1.5; }
+.restart-gesture-guide small { font-size: .75cqw; opacity: .75; }
+.restart-gesture-guide progress { width: 12cqw; height: .4cqw; accent-color: #f2dfb9; }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @keyframes panel-in { from { opacity: 0; translate: -3cqw 0; scale: .9; } }
 

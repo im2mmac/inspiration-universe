@@ -170,6 +170,8 @@ export class WristCamera {
         span: Math.max(.04, dist(left, right)),
         shoulder: [1 - right.x, right.y],
         wrist: wrist && (wrist.visibility ?? 1) >= .45 ? [1 - wrist.x, wrist.y] : null,
+        leftWrist: leftWrist && (leftWrist.visibility ?? 1) >= .45 ? [1 - leftWrist.x, leftWrist.y] : null,
+        head: pose[0] && (pose[0].visibility ?? 1) >= .45 ? [1 - pose[0].x, pose[0].y] : null,
         palm: h ? [1 - (h[0].x + h[9].x) / 2, (h[0].y + h[9].y) / 2] : null,
         grip: h ? gripOf(h) : null,
         leftShoulder: [1 - left.x, left.y],

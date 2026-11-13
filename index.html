@@ -47,6 +47,12 @@
       <p class="done">우리의 음악이 완성되었어요</p>
       <div id="qr" class="qr" role="img" aria-label="음악 다운로드 QR"></div>
       <p class="qr-cap">휴대폰 카메라로 찍어<br>음악을 받아 가세요</p>
+      <div class="restart-gesture-guide">
+        <svg viewBox="0 0 100 66" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="50" cy="29" r="7"/><path d="M50 38v23M50 43L30 29 23 9M50 43L70 29 77 9M14 14l9-7 9 5M68 12l9-5 9 7"/></g></svg>
+        <p id="restart-gesture-text">새로 시작하려면 양팔을 머리 위로 들고 좌우로 흔들어 주세요</p>
+        <progress id="restart-progress" max="1" value="0" aria-label="새로 시작 동작 인식"></progress>
+        <small>한 명만 해도 돼요 · 필요한 음악은 먼저 저장해 주세요</small>
+      </div>
       <div class="finish-actions">
         <button type="button" id="save">음원 저장</button>
         <button type="button" id="again">다시 시작</button>
