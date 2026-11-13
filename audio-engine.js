@@ -4,7 +4,7 @@
 // - 놓아주면 필터가 닫히며 한 마디에 걸쳐 멀어진다.
 // - 바탕 곡의 악기가 우선이고, 다른 곡의 드럼·퍼커션(음 높이 없음)과
 //   화음이 맞는 곡의 선율 악기, 이미 울리는 악기의 메아리 버전이 섞여 든다.
-import { BPM, COMPATIBLE, INSTRUMENTS, KIND, LAYERS, LOOP_SECONDS, MIX_MELODIES, SONGS, STEM_GAIN, stemUrl } from "./music-catalog.js";
+import { BPM, COMPATIBLE, INSTRUMENTS, KIND, LAYERS, MAIN_SONGS, MIX_MELODIES, SONGS, STEM_GAIN, stemUrl } from "./music-catalog.js";
 
 const BEAT = 60 / BPM;
 const BAR = BEAT * 4;
@@ -13,7 +13,7 @@ const LAST_KEY = "inspiration-universe-last-song";
 const BORROW_RHYTHM_LIMIT = 2;   // 다른 곡 리듬은 동시에 두 줄까지
 const ECHO_LEVEL = .5;
 
-const songIndex = take => take > 0 ? (take - 1) % SONGS.length : 0;
+const songIndex = take => take > 0 ? (take - 1) % MAIN_SONGS.length : 0;
 const songOf = layer => SONGS.find(song => song.id === layer.split("/")[0]);
 const stemOf = layer => layer.split("/")[1].replace(/~e$/, "");
 
@@ -23,12 +23,12 @@ function lastSong() {
 
 // take는 바탕 곡 번호(1부터). 이름은 예전 코드와 맞추려고 그대로 둔다.
 export function nextArrangement(previous = lastSong()) {
-  const choices = SONGS.map((_, i) => i + 1).filter(n => n !== previous);
+  const choices = MAIN_SONGS.map((_, i) => i + 1).filter(n => n !== previous);
   return choices[Math.floor(Math.random() * choices.length)] || 1;
 }
 
 export function arrangementName(take) {
-  return SONGS[songIndex(take)]?.title || SONGS[0].title;
+  return MAIN_SONGS[songIndex(take)]?.title || MAIN_SONGS[0].title;
 }
 
 export function layerLabel(layer, base) {
@@ -54,7 +54,7 @@ export function layerFromCode(code) {
 // heard: 이번 회차에 이미 울렸던 악기(놓아준 것 포함). 아직 안 나온 악기를 먼저 고르고,
 // 방금 놓아준 악기는 다른 선택지가 하나도 없을 때만 다시 쓴다.
 export function chooseLayer(item, active, take, heard = []) {
-  const base = SONGS[songIndex(take)];
+  const base = MAIN_SONGS[songIndex(take)];
   const used = new Set(active);
   const seen = new Set(heard);
   const recent = heard[heard.length - 1];
@@ -65,7 +65,7 @@ export function chooseLayer(item, active, take, heard = []) {
   const own = kinds => base.stems.filter(stem => kinds.includes(KIND[stem])).map(stem => base.id + "/" + stem);
   const borrowedRhythm = SONGS.filter(song => song !== base)
     .flatMap(song => song.stems.filter(stem => KIND[stem] === "rhythm").map(stem => song.id + "/" + stem));
-  const friendIds = MIX_MELODIES ? SONGS.filter(song => song !== base).map(song => song.id) : (COMPATIBLE[base.id] || []);
+  const friendIds = MIX_MELODIES ? MAIN_SONGS.filter(song => song !== base).map(song => song.id) : (COMPATIBLE[base.id] || []);
   const friendly = friendIds.flatMap(id => {
     const song = SONGS.find(s => s.id === id);
     return song.stems.filter(stem => KIND[stem] !== "rhythm" && KIND[stem] !== "low").map(stem => song.id + "/" + stem);
@@ -97,11 +97,11 @@ export function chooseLayer(item, active, take, heard = []) {
 
 // 바탕 곡이 바뀔 때 남아 있는 악기를 새 곡의 같은 악기(없으면 같은 성격의 악기)로 옮긴다.
 export function mapLayer(layer, fromTake, toTake, taken = new Set()) {
-  const from = SONGS[songIndex(fromTake)], to = SONGS[songIndex(toTake)];
+  const from = MAIN_SONGS[songIndex(fromTake)], to = MAIN_SONGS[songIndex(toTake)];
   const echo = layer.endsWith("~e");
   const song = songOf(layer), stem = stemOf(layer);
   const kind = KIND[stem];
-  const friends = MIX_MELODIES ? SONGS.map(s => s.id) : (COMPATIBLE[to.id] || []);
+  const friends = MIX_MELODIES ? MAIN_SONGS.map(s => s.id) : (COMPATIBLE[to.id] || []);
   // 다른 곡에서 온 리듬, 새 곡과 화음이 맞는 곡의 악기는 그대로 둔다
   if (song !== from && (kind === "rhythm" || song === to || friends.includes(song.id)) && !taken.has(layer)) return layer;
   const options = [
@@ -161,7 +161,7 @@ function voice(context, output, buffer, layer, base, when, offset) {
   gain.gain.value = 0;
   const borrowed = song.id !== base;
   // 악기마다 고르게 맞춘 음량 (곡 믹스 비율 대신 각 악기가 들리도록)
-  let level = .8 * (STEM_GAIN[layer.replace(/~e$/, "")] ?? song.gain) * (borrowed ? .85 : 1);
+  let level = .8 * (STEM_GAIN[layer.replace(/~e$/, "")] ?? 1) * (borrowed ? .85 : 1);
   source.connect(filter);
   let last = filter;
   if (layer.endsWith("~e")) {
@@ -182,7 +182,7 @@ function voice(context, output, buffer, layer, base, when, offset) {
     level *= ECHO_LEVEL;
   }
   last.connect(gain).connect(output);
-  source.start(when, offset % LOOP_SECONDS);
+  source.start(when, offset % buffer.duration);
   const kind = layer.endsWith("~e") ? "echo" : KIND[layer.split("/")[1]];
   return { source, filter, gain, level, layer, kind, born: when, weight: 1 };
 }
@@ -201,7 +201,7 @@ export class UniverseAudio {
     this.origin = null;
   }
 
-  get base() { return SONGS[songIndex(this.take)].id; }
+  get base() { return MAIN_SONGS[songIndex(this.take)].id; }
 
   async start() {
     if (!this.context) this.initialize();
@@ -222,10 +222,10 @@ export class UniverseAudio {
 
   // 바탕 곡과 다른 곡의 리듬을 미리 받아 둔다
   prefetch(take) {
-    const base = SONGS[songIndex(take)];
+    const base = MAIN_SONGS[songIndex(take)];
     const list = [...base.stems.map(stem => base.id + "/" + stem)];
     for (const song of SONGS) if (song !== base) for (const stem of song.stems) if (KIND[stem] === "rhythm") list.push(song.id + "/" + stem);
-    const friends = MIX_MELODIES ? SONGS.filter(s => s !== base).map(s => s.id) : (COMPATIBLE[base.id] || []);
+    const friends = MIX_MELODIES ? MAIN_SONGS.filter(s => s !== base).map(s => s.id) : (COMPATIBLE[base.id] || []);
     for (const id of friends) for (const stem of SONGS.find(s => s.id === id).stems) list.push(id + "/" + stem);
     for (const layer of list) loadStem(this.context, layer).catch(() => {});
   }
@@ -327,12 +327,15 @@ export class UniverseAudio {
     const now = this.context.currentTime;
     const bar = this.origin === null ? now + .3 : this.origin + Math.ceil((now - this.origin + .3) / BAR) * BAR;
     // 다른 곡에서 온 악기는 그대로 두고(먼저 자리 확보), 이전 바탕 곡의 악기만 새 곡으로 옮긴다
-    const fromId = SONGS[songIndex(from)].id;
+    const fromId = MAIN_SONGS[songIndex(from)].id;
     const others = [...this.items].filter(([, other]) => other !== item);
-    const taken = new Set(others.filter(([, o]) => !o.layer.startsWith(fromId + "/")).map(([, o]) => o.layer));
+    const toId = MAIN_SONGS[songIndex(this.take)].id;
+    const stays = layer => !layer.startsWith(fromId + "/") && (KIND[stemOf(layer)] === "rhythm" || layer.startsWith(toId + "/")
+      || (MIX_MELODIES || (COMPATIBLE[toId] || []).includes(layer.split("/")[0])));
+    const taken = new Set(others.filter(([, o]) => stays(o.layer)).map(([, o]) => o.layer));
     const moved = [];
     for (const [id, other] of others) {
-      const next = other.layer.startsWith(fromId + "/") ? mapLayer(other.layer, from, this.take, taken) : other.layer;
+      const next = stays(other.layer) ? other.layer : mapLayer(other.layer, from, this.take, taken);
       taken.add(next);
       moved.push([id, other, next]);
     }
@@ -431,7 +434,7 @@ export class UniverseAudio {
       if (!item.layer) item.layer = chooseLayer(item, active, this.take);
       active.push(item.layer);
     }
-    const rate = 44100;
+    const rate = 48000;
     const enter = 2 * BAR;
     const seconds = ordered.length * enter + 12 * BAR + 2 * BAR;
     const Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
