@@ -346,3 +346,33 @@
 .stage[data-state="ascend"] .slots { opacity: .35; transition: opacity 1.5s; }
 .stage[data-state="ascend"] .art-layer { opacity: 0 !important; transition: opacity 1.5s; }
 .stage.lite .constellation circle { filter: none; }
+
+/* 수집 후에만 보이는 지우기 안내. 수집 칸 위 오른쪽 끝에 배치한다. */
+.stage .erase-guide {
+  display: none;
+  position: absolute;
+  right: 1.8cqw;
+  bottom: 9cqw;
+  z-index: 7;
+  align-items: center;
+  gap: .65cqw;
+  padding: .65cqw .9cqw;
+  border-radius: .7cqw;
+  background: #071024c9;
+  border: 1px solid #f0cf8e24;
+  color: #eee2cb;
+  pointer-events: none;
+}
+.stage[data-state="active"]:has(.slot.filled) .erase-guide { display: flex; }
+.stage .erase-guide p { margin: 0; font: 400 1.05cqw/1.65 var(--serif); }
+.stage .erase-guide strong { font-weight: 500; color: #f0cf8e; }
+.stage .erase-guide-icon { font-size: 2.2cqw; color: #f0cf8e; }
+.stage .erase-guide-hand, .stage.camera-on .erase-guide-mouse { display: none; }
+.stage.camera-on .erase-guide-hand { display: block; }
+
+/* 음악의 바탕이 된 영감: 금빛 별 표시 (놓아주면 다음 영감이 새 바탕이 되고 곡이 바뀐다) */
+.stage .slot.anchor { box-shadow: 0 0 1.4cqw #f0cf8e, inset 0 0 .8cqw #0008; border-color: #f0cf8e; }
+.stage .slot.anchor::after {
+  content: "★"; position: absolute; left: -.35cqw; top: -.45cqw; font-size: 1.1cqw; color: #ffe7a8;
+  text-shadow: 0 0 .6cqw #f0cf8e;
+}

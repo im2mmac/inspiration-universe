@@ -15,7 +15,6 @@ export const SONGS = [
       "Drums",
       "Bass",
       "Percussion",
-      "Keyboard",
       "Guitar",
       "Strings",
       "Brass",
@@ -30,11 +29,9 @@ export const SONGS = [
     "gain": 1.641,
     "stems": [
       "Bass",
-      "Keyboard",
       "Strings",
       "Brass",
-      "Woodwinds",
-      "Synth"
+      "Woodwinds"
     ]
   },
   {
@@ -92,6 +89,13 @@ export const SONGS = [
     ]
   }
 ];
+
+// 악기마다 들리는 크기를 고르게 맞추는 값 (활성 구간 기준 -26dB에 맞춤, 0.6~2.5배)
+export const STEM_GAIN = {"s1/Bass": 0.77, "s1/Brass": 2.34, "s1/Drums": 1.17, "s1/Guitar": 1.53, "s1/Percussion": 0.86, "s1/Strings": 1.01, "s1/Synth": 1.66, "s1/Woodwinds": 1.58, "s10/Drums": 0.6, "s10/Guitar": 1.15, "s10/Keyboard": 1.97, "s10/Percussion": 1.7, "s10/Synth": 1.97, "s2/Bass": 2.09, "s2/Brass": 2.48, "s2/Strings": 1.19, "s2/Woodwinds": 0.69, "s3/Bass": 0.6, "s3/Drums": 0.6, "s3/Keyboard": 0.86, "s3/Percussion": 1.29, "s3/Synth": 1.0, "s4/Bass": 1.16, "s4/Drums": 0.6, "s4/Keyboard": 1.8, "s4/Synth": 1.23, "s5/Bass": 1.22, "s5/Brass": 2.48, "s5/Drums": 0.64, "s5/Guitar": 2.5, "s5/Keyboard": 1.91, "s5/Percussion": 1.8, "s5/Strings": 0.73, "s5/Synth": 2.34};
+
+// true면 다른 곡의 선율·화음 악기도 마구 섞인다 (템포는 같고 조성은 다르다).
+// 들어 보고 탁하면 false로 바꾸면 화음이 맞는 곡(COMPATIBLE)끼리만 섞인다.
+export const MIX_MELODIES = true;
 
 export const COMPATIBLE = { s5: ["s10"], s10: ["s5"] };
 

@@ -458,14 +458,18 @@ function catchItem(floater, player) {
   nets[player].swish = 1;
   nets[player].caught += 1;
   actors[player].hop = 1;
-  audio.capture(item);
+  const change = audio.capture(item);
   burst(floater.x, floater.y, PLAYERS[player].color, ROLE_TINT[item.role]);
   fly(floater, slot, player);
   removeFloater(index);
   warp = 1;
   drawTray(slot);
   drawLayers();
-  status(PLAYERS[player].label + "번 · " + item.name + " · " + (item.soundLabel || "새 악기") + " 합류");
+  if (change?.switched) {
+    // 바탕을 놓아준 뒤 새로 낚으면 음악의 바탕 곡이 바뀐다
+    warp = 1.6;
+    status(PLAYERS[player].label + "번 · " + item.name + " · 음악의 바탕이 ‘" + change.switched + "’(으)로 바뀌었어요");
+  } else status(PLAYERS[player].label + "번 · " + item.name + " · " + (item.soundLabel || "새 악기") + " 합류" + (item.anchor ? " · 이 영감이 음악의 바탕이에요" : ""));
   hint("");
   if (selected.size === LIMIT) {
     clearFloaters();
@@ -559,7 +563,7 @@ function drawTray(fresh = -1) {
   byId("count").textContent = String(selected.size).padStart(2, "0");
   slots.replaceChildren(...slotsList.map((item, index) => {
     const cell = document.createElement(item ? "button" : "span");
-    cell.className = "slot " + (item ? "filled" : "empty") + (index === fresh ? " fresh" : "");
+    cell.className = "slot " + (item ? "filled" : "empty") + (index === fresh ? " fresh" : "") + (item?.anchor ? " anchor" : "");
     cell.dataset.slot = index;
     if (item) {
       cell.type = "button";
