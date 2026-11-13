@@ -1,215 +1,269 @@
-import { cueOptions, cueUrl, preferences } from "./sound-options.js";
-import { InspirationLayers, loadInspirationSamples } from "./inspiration-audio.js";
-import { SunoLoops, sunoBpm, sunoLoopSeconds } from "./suno-audio.js";
+// 영감의 우주 음악 엔진: 낚은 영감 하나가 Suno 곡의 악기 한 줄(스템)이 되어 쌓인다.
+// - 첫 영감을 낚을 때 바탕 곡 하나를 고른다 (바로 앞 회차와 다른 곡).
+// - 낚으면 그 악기가 지금 위치에 맞춰 바로 재생되기 시작해, 필터가 열리며 다음 박까지 차오른다.
+// - 놓아주면 필터가 닫히며 한 마디에 걸쳐 멀어진다.
+// - 바탕 곡의 악기가 우선이고, 다른 곡의 드럼·퍼커션(음 높이 없음)과
+//   화음이 맞는 곡의 선율 악기, 이미 울리는 악기의 메아리 버전이 섞여 든다.
+import { BPM, COMPATIBLE, INSTRUMENTS, KIND, LAYERS, LOOP_SECONDS, SONGS, stemUrl } from "./music-catalog.js";
 
-const beatLength = 60 / sunoBpm;
-const stepLength = beatLength / 4;
-const introSteps = 16;
-const masterLevel = .82;
-const lastTakeKey = "inspiration-universe-last-arrangement";
-const arrangements = [
-  { name: "나일론 기타와 브러시", pulse: "jazz-pulse", lead: "jazz-guitar", levels: [.64, .69] },
-  { name: "손끝 기타와 카혼", pulse: "finger-pulse", lead: "fingerstyle", levels: [.72, .61] },
-  { name: "첼로와 낮은 박", pulse: "cello-pulse", lead: "cello", levels: [.68, .72] },
-];
-const legacyBed = { pulse: "foundation-beat", lead: "foundation-melody", levels: [.52, .68] };
+const BEAT = 60 / BPM;
+const BAR = BEAT * 4;
+const MASTER = .85;
+const LAST_KEY = "inspiration-universe-last-song";
+const BORROW_RHYTHM_LIMIT = 2;   // 다른 곡 리듬은 동시에 두 줄까지
+const ECHO_LEVEL = .5;
 
-function arrangementIndex(take) {
-  return take > 0 ? (take - 1) % arrangements.length : -1;
+const songIndex = take => take > 0 ? (take - 1) % SONGS.length : 0;
+const songOf = layer => SONGS.find(song => song.id === layer.split("/")[0]);
+const stemOf = layer => layer.split("/")[1].replace(/~e$/, "");
+
+function lastSong() {
+  try { return Number(localStorage.getItem(LAST_KEY)) || 0; } catch { return 0; }
 }
 
-function recentArrangement() {
-  try { return Number(localStorage.getItem(lastTakeKey)) || 0; } catch { return 0; }
-}
-
-export function nextArrangement(previous = recentArrangement()) {
-  const take = 1 + Math.floor(Math.random() * 0xfffffe);
-  return arrangementIndex(take) === arrangementIndex(previous) ? take + 1 : take;
+// take는 바탕 곡 번호(1부터). 이름은 예전 코드와 맞추려고 그대로 둔다.
+export function nextArrangement(previous = lastSong()) {
+  const choices = SONGS.map((_, i) => i + 1).filter(n => n !== previous);
+  return choices[Math.floor(Math.random() * choices.length)] || 1;
 }
 
 export function arrangementName(take) {
-  return arrangements[arrangementIndex(take)]?.name || "카혼과 하프";
+  return SONGS[songIndex(take)]?.title || SONGS[0].title;
 }
 
-function mixBus(context, level = masterLevel) {
+export function layerLabel(layer, base) {
+  if (!layer) return "";
+  const song = songOf(layer);
+  const name = INSTRUMENTS[stemOf(layer)] || stemOf(layer);
+  const echo = layer.endsWith("~e") ? " 메아리" : "";
+  return (song && song.id !== base ? song.title + " " : "") + name + echo;
+}
+
+// QR 주소용 짧은 코드
+export function layerCode(layer) {
+  const index = LAYERS.indexOf(layer.replace(/~e$/, ""));
+  return index < 0 ? "" : index.toString(36) + (layer.endsWith("~e") ? "e" : "");
+}
+export function layerFromCode(code) {
+  const match = /^([0-9a-z]{1,2})(e?)$/.exec(code || "");
+  const layer = match && LAYERS[parseInt(match[1], 36)];
+  return layer ? layer + (match[2] ? "~e" : "") : null;
+}
+
+// 영감 하나에 어떤 악기 줄을 붙일지 정한다. 같은 상황이면 같은 결과가 나온다.
+export function chooseLayer(item, active, take) {
+  const base = SONGS[songIndex(take)];
+  const used = new Set(active);
+  const pick = list => {
+    const free = list.filter(layer => !used.has(layer));
+    return free.length ? free[(item.seed * 7 + active.length) % free.length] : null;
+  };
+  const own = kinds => base.stems.filter(stem => kinds.includes(KIND[stem])).map(stem => base.id + "/" + stem);
+  const borrowedRhythm = SONGS.filter(song => song !== base)
+    .flatMap(song => song.stems.filter(stem => KIND[stem] === "rhythm").map(stem => song.id + "/" + stem));
+  const friendly = (COMPATIBLE[base.id] || []).flatMap(id => {
+    const song = SONGS.find(s => s.id === id);
+    return song.stems.filter(stem => KIND[stem] !== "rhythm" && KIND[stem] !== "low").map(stem => song.id + "/" + stem);
+  });
+  const echoes = active.filter(layer => !layer.endsWith("~e") && songOf(layer) === base && KIND[stemOf(layer)] !== "rhythm" && KIND[stemOf(layer)] !== "low")
+    .map(layer => layer + "~e");
+  const borrowing = active.filter(layer => songOf(layer) !== base && KIND[stemOf(layer)] === "rhythm").length;
+  const rhythmOk = borrowing < BORROW_RHYTHM_LIMIT ? borrowedRhythm : [];
+
+  const plans = {
+    base: [own(["low", "rhythm"]), own(["harmony"]), rhythmOk, own(["lead"])],
+    melody: [own(["harmony", "lead"]), friendly, own(["low", "rhythm"]), echoes, rhythmOk],
+    texture: [rhythmOk, friendly, own(["lead", "harmony"]), echoes, own(["low", "rhythm"])],
+  };
+  for (const list of plans[item.role] || plans.texture) {
+    const layer = pick(list);
+    if (layer) return layer;
+  }
+  return pick([...own(["low", "rhythm", "harmony", "lead"]), ...friendly, ...borrowedRhythm, ...echoes])
+    || base.id + "/" + base.stems[item.seed % base.stems.length] + "~e";
+}
+
+function mixBus(context, level = MASTER) {
   const input = context.createGain();
   const compressor = context.createDynamicsCompressor();
   const output = context.createGain();
-  compressor.threshold.value = -17;
-  compressor.ratio.value = 2.8;
+  compressor.threshold.value = -14;
+  compressor.knee.value = 8;
+  compressor.ratio.value = 3;
+  compressor.attack.value = .01;
+  compressor.release.value = .25;
   output.gain.value = level;
   input.connect(compressor).connect(output);
   return { input, output };
 }
 
-async function decoded(context, url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Audio asset " + response.status);
-  return context.decodeAudioData(await response.arrayBuffer());
+const buffers = new Map();
+async function loadStem(context, layer) {
+  const key = layer.replace(/~e$/, "");
+  if (!buffers.has(key)) {
+    buffers.set(key, fetch(stemUrl(key))
+      .then(response => { if (!response.ok) throw new Error("Audio " + response.status); return response.arrayBuffer(); })
+      .then(data => context.decodeAudioData(data))
+      .catch(error => { buffers.delete(key); throw error; }));
+  }
+  return buffers.get(key);
+}
+
+// 악기 한 줄: 루프 재생 → 필터 → 음량 (메아리 버전은 딜레이와 높은 대역만)
+function voice(context, output, buffer, layer, base, when, offset) {
+  const song = songOf(layer);
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  const filter = context.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 20000;
+  filter.Q.value = .7;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  const borrowed = song.id !== base;
+  let level = song.gain * (borrowed ? .82 : 1);
+  source.connect(filter);
+  let last = filter;
+  if (layer.endsWith("~e")) {
+    // 메아리: 점8분음표(0.3초) 딜레이, 높은 대역만, 좌우로 퍼지게
+    const high = context.createBiquadFilter();
+    high.type = "highpass";
+    high.frequency.value = 600;
+    const delay = context.createDelay(1);
+    delay.delayTime.value = BEAT * .75;
+    const feedback = context.createGain();
+    feedback.gain.value = .38;
+    const pan = context.createStereoPanner ? context.createStereoPanner() : context.createGain();
+    if (pan.pan) pan.pan.value = (Math.random() < .5 ? -1 : 1) * .55;
+    filter.connect(high).connect(delay);
+    delay.connect(feedback).connect(delay);
+    delay.connect(pan);
+    last = pan;
+    level *= ECHO_LEVEL;
+  }
+  last.connect(gain).connect(output);
+  source.start(when, offset % LOOP_SECONDS);
+  return { source, filter, gain, level, layer };
 }
 
 export class UniverseAudio {
   constructor({ take } = {}) {
-    this.cues = new Map();
-    this.entries = [];
-    this.queue = [];
-    this.muted = false;
-    this.origin = null;
     this.take = take ?? nextArrangement();
     this.fixedTake = take !== undefined;
-    this.beds = new Map();
+    this.voices = new Map();   // item.id → voice
+    this.active = [];          // 지금 울리는 층 (선택 순서)
+    this.muted = false;
+    this.origin = null;
   }
+
+  get base() { return SONGS[songIndex(this.take)].id; }
 
   async start() {
     if (!this.context) this.initialize();
-    await Promise.all([this.context.resume(), this.ready]);
-    if (this.timer || this.closed) return;
-    this.timer = setInterval(() => this.schedule(), 23);
-    this.schedule();
+    await this.context.resume();
   }
 
   initialize() {
     const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!Audio) throw new Error("AudioContext unavailable");
-    this.context = new Audio();
-    this.bus = mixBus(this.context, this.muted ? 0 : masterLevel);
+    this.context = new Audio({ latencyHint: "interactive" });
+    this.bus = mixBus(this.context, this.muted ? 0 : MASTER);
     this.analyser = this.context.createAnalyser();
     this.analyser.fftSize = 256;
     this.levels = new Uint8Array(this.analyser.frequencyBinCount);
     this.bus.output.connect(this.analyser).connect(this.context.destination);
-    const cueLoads = Object.keys(cueOptions).flatMap(kind => Array.from({ length: 5 }, async (_, index) => {
-      this.cues.set(kind + index, await decoded(this.context, cueUrl(kind, index)));
-    }));
-    this.layersReady = loadInspirationSamples(this.context).then(samples => {
-      this.layers = new InspirationLayers(this.context, this.bus.input, samples, this.take);
-    });
-    const indexes = this.fixedTake ? [arrangementIndex(this.take)] : arrangements.map((_, index) => index);
-    this.ready = Promise.allSettled([...cueLoads, this.layersReady, ...indexes.map(index => this.prepareBed(index))]);
+    this.prefetch(this.take);
   }
 
-  async prepareBed(index) {
-    const { pulse, lead, levels } = arrangements[index] || legacyBed;
-    const dir = index < 0 ? "./assets/audio/" : "./assets/audio/arrangements/";
-    const tracks = await Promise.all([pulse, lead].map(async (file, i) => ({
-      id: i === 0 ? "pulse" : "lead",
-      buffer: await decoded(this.context, new URL(dir + file + ".wav", import.meta.url)),
-      bed: levels[i],
-    })));
-    this.beds.set(index, tracks);
+  // 바탕 곡과 다른 곡의 리듬을 미리 받아 둔다
+  prefetch(take) {
+    const base = SONGS[songIndex(take)];
+    const list = [...base.stems.map(stem => base.id + "/" + stem)];
+    for (const song of SONGS) if (song !== base) for (const stem of song.stems) if (KIND[stem] === "rhythm") list.push(song.id + "/" + stem);
+    for (const id of COMPATIBLE[base.id] || []) for (const stem of SONGS.find(s => s.id === id).stems) list.push(id + "/" + stem);
+    for (const layer of list) loadStem(this.context, layer).catch(() => {});
   }
 
-  backing(context, output, take) {
-    const tracks = this.beds.get(arrangementIndex(take));
-    return tracks && new SunoLoops(context, output, tracks);
-  }
+  position(at) { return this.origin === null ? 0 : at - this.origin; }
 
-  leaveSpace(backing, bar, items, at) {
-    if (!backing) return;
-    const [pulse, lead] = backing.tracks;
-    const hasAnswer = items.some(item => item.role === "melody");
-    const space = hasAnswer ? (bar % 2 ? .73 : .92) : 1;
-    backing.setLevels({ pulse: pulse.bed, lead: lead.bed * space }, at);
+  nextBeatTime(at = this.context.currentTime) {
+    if (this.origin === null) return at;
+    return this.origin + Math.ceil((at - this.origin + .02) / BEAT) * BEAT;
   }
 
   beat() {
-    if (this.origin === null) return null;
-    const beats = Math.max(0, (this.context.currentTime - this.origin) / beatLength);
-    return { phase: beats % 1 };
+    if (this.origin === null || !this.context) return null;
+    const beats = Math.max(0, (this.context.currentTime - this.origin) / BEAT);
+    return { bar: Math.floor(beats / 4), beat: Math.floor(beats % 4), phase: beats % 1 };
   }
 
   nextJoinDelay() {
-    if (this.origin === null) return introSteps * stepLength;
-    const position = Math.max(introSteps, this.index, (this.context.currentTime - this.origin) / stepLength);
-    const at = this.origin + Math.ceil(position / 4) * beatLength;
-    return Math.max(0, at - this.context.currentTime);
+    if (!this.context || this.origin === null) return .35;
+    return Math.max(.25, this.nextBeatTime() - this.context.currentTime);
   }
 
-  playCue(kind, at = this.context?.currentTime) {
-    const buffer = this.cues.get(kind + preferences()[kind]);
-    if (!buffer || !this.context) return;
-    const source = this.context.createBufferSource();
-    const gain = this.context.createGain();
-    source.buffer = buffer;
-    gain.gain.value = kind === "layer" ? .05 : .08;
-    source.connect(gain).connect(this.bus.input);
-    source.start(at);
-    source.onended = () => { source.disconnect(); gain.disconnect(); };
-  }
-
+  // 낚기: 층을 정하고 바로 차오르게 한다. item.layer, item.soundLabel을 채운다.
   capture(item) {
-    this.playCue("catch");
-    if (this.layers) this.layers.cue(item, this.context.currentTime);
-    else void this.layersReady?.then(() => {
-      if (!this.closed && this.queue.some(change => change.item.id === item.id)) {
-        this.layers.cue(item, this.context.currentTime);
-      }
-    });
-    this.queue.push({ type: "add", item });
-    if (this.timer && this.origin === null) this.schedule();
+    if (!this.context) this.initialize();
+    const layer = item.layer || chooseLayer(item, this.active, this.take);
+    item.layer = layer;
+    item.soundLabel = layerLabel(layer, this.base);
+    this.active.push(layer);
+    const context = this.context;
+    void loadStem(context, layer).then(buffer => {
+      if (!this.active.includes(layer) || this.voices.has(item.id) || this.closed) return;
+      const now = context.currentTime + .03;
+      if (this.origin === null) this.origin = now;
+      try { localStorage.setItem(LAST_KEY, String(this.take)); } catch {}
+      const v = voice(context, this.bus.input, buffer, layer, this.base, now, this.position(now));
+      const arrive = Math.max(now + .35, this.nextBeatTime(now + .2));
+      v.filter.frequency.setValueAtTime(700, now);
+      v.filter.frequency.exponentialRampToValueAtTime(20000, arrive);
+      v.gain.gain.setValueAtTime(0, now);
+      v.gain.gain.linearRampToValueAtTime(v.level, arrive);
+      this.voices.set(item.id, v);
+    }).catch(() => {});
   }
 
+  // 놓아주기: 필터가 닫히며 한 마디 동안 멀어진다
   release(item) {
-    this.playCue("release");
-    this.layers?.cue(item, this.context.currentTime, true);
-    this.queue.push({ type: "remove", item });
+    const index = this.active.indexOf(item.layer);
+    if (index >= 0) this.active.splice(index, 1);
+    const v = this.voices.get(item.id);
+    this.voices.delete(item.id);
+    if (!v || !this.context) return;
+    const now = this.context.currentTime;
+    const end = now + BAR;
+    v.filter.frequency.cancelScheduledValues(now);
+    v.filter.frequency.setValueAtTime(v.filter.frequency.value, now);
+    v.filter.frequency.exponentialRampToValueAtTime(260, end);
+    v.gain.gain.cancelScheduledValues(now);
+    v.gain.gain.setValueAtTime(v.gain.gain.value, now);
+    v.gain.gain.linearRampToValueAtTime(0, end);
+    v.source.stop(end + .05);
   }
 
   clear() {
-    this.entries = [];
-    this.queue = [];
-    this.bed?.stop();
+    const now = this.context?.currentTime ?? 0;
+    for (const v of this.voices.values()) {
+      v.gain.gain.cancelScheduledValues(now);
+      v.gain.gain.setTargetAtTime(0, now, .12);
+      v.source.stop(now + .8);
+    }
+    this.voices.clear();
+    this.active = [];
     this.origin = null;
-    this.layers?.sync([], this.context.currentTime, 0);
-    if (!this.fixedTake && this.lastPlayed === this.take) this.take = nextArrangement(this.take);
-    if (this.layers) this.layers.take = this.take;
+    if (!this.fixedTake) {
+      this.take = nextArrangement(this.take);
+      if (this.context) this.prefetch(this.take);
+    }
   }
 
   toggleMute() {
     this.muted = !this.muted;
-    if (this.context) this.bus.output.gain.setTargetAtTime(this.muted ? 0 : masterLevel, this.context.currentTime, .04);
+    if (this.context) this.bus.output.gain.setTargetAtTime(this.muted ? 0 : MASTER, this.context.currentTime, .04);
     return this.muted;
-  }
-
-  schedule() {
-    const context = this.context;
-    if (context.state !== "running") return;
-    if (this.origin === null) {
-      if (!this.queue.some(change => change.type === "add")) return;
-      this.origin = context.currentTime + .035;
-      this.next = this.origin;
-      this.index = 0;
-      this.lastPlayed = this.take;
-      if (this.take) {
-        try { localStorage.setItem(lastTakeKey, String(this.take)); } catch {}
-      }
-      this.bed = this.backing(context, this.bus.input, this.take);
-      this.bed?.start(this.origin);
-    }
-    if (this.next < context.currentTime) {
-      this.index = Math.ceil((context.currentTime - this.origin) / stepLength);
-      this.next = this.origin + this.index * stepLength;
-    }
-    while (this.next < context.currentTime + .09) {
-      if (this.index >= introSteps && this.index % 4 === 0 && this.queue.length) {
-        const previous = this.entries;
-        const next = new Map(previous.map(item => [item.id, item]));
-        for (const { type, item } of this.queue) {
-          if (type === "add") next.set(item.id, item);
-          else next.delete(item.id);
-        }
-        this.entries = [...next.values()];
-        this.queue = [];
-        this.layers.sync(this.entries, this.next, this.index);
-        const previousIds = new Set(previous.map(item => item.id));
-        if (this.entries.some(item => !previousIds.has(item.id))) this.playCue("layer", this.next);
-      }
-      if (this.take && this.index % 16 === 0) {
-        this.leaveSpace(this.bed, this.index / 16, this.entries, this.next);
-      }
-      this.layers.schedule(this.index, this.next);
-      this.index += 1;
-      this.next = this.origin + this.index * stepLength;
-    }
   }
 
   energy() {
@@ -222,42 +276,36 @@ export class UniverseAudio {
 
   async close() {
     this.closed = true;
-    clearInterval(this.timer);
-    this.bed?.stop();
     if (this.context) await this.context.close();
   }
 
+  // 받아 가는 음악: 고른 순서대로 두 마디마다 한 줄씩 들어오고, 다 모인 뒤 12마디를 함께 연주한 다음 잦아든다.
   async render(items) {
-    const take = this.take;
-    if (!this.context) this.initialize();
-    await this.ready;
-    const Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
-    const rate = 44100;
-    const seconds = sunoLoopSeconds * (take ? 2 : 1);
-    const context = new Offline(2, Math.round(rate * seconds), rate);
-    const bus = mixBus(context, .92);
-    bus.output.connect(context.destination);
-    const backing = this.backing(context, bus.input, take);
-    if (!backing) throw new Error("Accompaniment unavailable");
-    backing.start(0);
-    const layers = new InspirationLayers(context, bus.input, this.layers.buffers, take);
-    if (!take) {
-      layers.sync(items, 0);
-      for (let step = introSteps; step < 128; step += 1) layers.schedule(step, step * stepLength);
-    } else {
-      const ordered = [...items].sort((a, b) => a.slot - b.slot);
-      for (let bar = 1; bar < 16; bar += 1) {
-        const count = Math.ceil(ordered.length * Math.min(bar, 8) / 8);
-        const active = ordered.slice(0, count);
-        const at = bar * 16 * stepLength;
-        layers.sync(active, at);
-        this.leaveSpace(backing, bar, active, at);
-        for (let step = bar * 16; step < (bar + 1) * 16; step += 1) {
-          layers.schedule(step, step * stepLength);
-        }
-      }
+    const ordered = [...items].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0));
+    const active = [];
+    for (const item of ordered) {
+      if (!item.layer) item.layer = chooseLayer(item, active, this.take);
+      active.push(item.layer);
     }
-    bus.output.gain.setValueAtTime(.92, seconds - (take ? 1 : .012));
+    const rate = 44100;
+    const enter = 2 * BAR;
+    const seconds = ordered.length * enter + 12 * BAR + 2 * BAR;
+    const Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
+    const decoder = new Offline(2, rate, rate);
+    const context = new Offline(2, Math.round(rate * seconds), rate);
+    const bus = mixBus(context, .8);
+    bus.output.connect(context.destination);
+    const loaded = await Promise.all(ordered.map(item => loadStem(decoder, item.layer).catch(() => null)));
+    ordered.forEach((item, i) => {
+      if (!loaded[i]) return;
+      const at = i * enter;
+      const v = voice(context, bus.input, loaded[i], item.layer, this.base, at, at);
+      v.filter.frequency.setValueAtTime(700, at);
+      v.filter.frequency.exponentialRampToValueAtTime(20000, at + BEAT);
+      v.gain.gain.setValueAtTime(0, at);
+      v.gain.gain.linearRampToValueAtTime(v.level, at + BEAT);
+    });
+    bus.output.gain.setValueAtTime(.8, seconds - 2 * BAR);
     bus.output.gain.linearRampToValueAtTime(0, seconds);
     return toWav(await context.startRendering());
   }

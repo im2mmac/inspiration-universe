@@ -1,7 +1,7 @@
 import { UniverseAudio } from "./audio-engine.js";
 import { WristCamera } from "./camera.js";
 import { catalog } from "./items.js";
-import { inspirationSound } from "./inspiration-audio.js";
+import { layerCode } from "./audio-engine.js";
 
 /* ────────────────────────────────────────────────────────────
    화면 설계 (75인치 16:9 기준, 모든 값은 무대 크기에 대한 비율)
@@ -162,8 +162,9 @@ function thumbnail(item) {
 const PUBLIC_SITE = "https://im2mmac.github.io/inspiration-universe/";
 function shareUrl() {
   const base = new URL("./song.html", location.protocol === "https:" ? location.href : PUBLIC_SITE);
-  const code = slotsList.map(item => item ? item.seed.toString(36) + "." + item.player : "").join("-");
-  base.hash = "v2." + audio.take.toString(36) + "~" + code;
+  // v3: 영감 번호.관람객.악기 줄 — 휴대폰에서 같은 층으로 다시 만든다
+  const code = slotsList.map(item => item ? [item.seed.toString(36), item.player, layerCode(item.layer || "")].filter(part => part !== "").join(".") : "").join("-");
+  base.hash = "v3." + audio.take.toString(36) + "~" + code;
   return base.href;
 }
 
@@ -454,7 +455,7 @@ function catchItem(floater, player) {
   warp = 1;
   drawTray(slot);
   drawLayers();
-  status(PLAYERS[player].label + "번 · " + item.name + " · " + inspirationSound(item).label + " 합류");
+  status(PLAYERS[player].label + "번 · " + item.name + " · " + (item.soundLabel || "새 악기") + " 합류");
   hint("");
   if (selected.size === LIMIT) {
     clearFloaters();
@@ -555,7 +556,7 @@ function drawTray(fresh = -1) {
       cell.style.setProperty("--player", PLAYERS[item.player].color);
       cell.style.setProperty("--tint", ROLE_TINT[item.role]);
       cell.setAttribute("aria-label", PLAYERS[item.player].label + "번 관람객의 " + item.name + " 놓아주기");
-      cell.title = item.name + (item.back ? " · " + item.back : "") + " · " + inspirationSound(item).label;
+      cell.title = item.name + (item.back ? " · " + item.back : "") + (item.soundLabel ? " · " + item.soundLabel : "");
       cell.append(thumbnail(item));
       const mark = document.createElement("b");
       mark.textContent = PLAYERS[item.player].label;

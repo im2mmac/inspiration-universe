@@ -1,19 +1,20 @@
 // QR로 들어온 휴대폰에서, 주소에 담긴 영감 목록으로 같은 합주를 다시 만들어 내려받는다.
-import { UniverseAudio, arrangementName } from "./audio-engine.js";
+import { UniverseAudio, arrangementName, layerFromCode, layerLabel } from "./audio-engine.js";
 import { catalog } from "./items.js";
 
 const colors = ["#ff7a68", "#ffd45e", "#6daeff"];
 const byId = id => document.getElementById(id);
 
 const hash = location.hash.slice(1);
-const versioned = /^v2\.([0-9a-z]{1,5})~(.*)$/.exec(hash);
-const take = versioned ? parseInt(versioned[1], 36) : 0;
-const items = (versioned?.[2] ?? hash).split("-").slice(0, 15).map((part, slot) => {
-  const match = /^([0-9a-z]{1,2})\.([0-2])$/.exec(part);
+// v3.<곡>~<영감.관람객.악기>-… (v2와 예전 주소도 열 수 있게 둔다. 악기는 다시 정해진다)
+const versioned = /^v([23])\.([0-9a-z]{1,5})~(.*)$/.exec(hash);
+const take = versioned && versioned[1] === "3" ? parseInt(versioned[2], 36) : 1;
+const items = (versioned?.[3] ?? hash).split("-").slice(0, 15).map((part, slot) => {
+  const match = /^([0-9a-z]{1,2})\.([0-2])(?:\.([0-9a-z]{0,2}e?))?$/.exec(part);
   if (!match) return null;
-  const [, seed, player] = match;
+  const [, seed, player, code] = match;
   const base = catalog[parseInt(seed, 36)];
-  return base ? { ...base, player: Number(player) || 0, slot, id: slot + 1 } : null;
+  return base ? { ...base, player: Number(player) || 0, slot, id: slot + 1, layer: layerFromCode(code) || undefined } : null;
 }).filter(Boolean);
 
 const people = new Set(items.map(item => item.player)).size;
@@ -31,7 +32,7 @@ byId("grid").replaceChildren(...items.map(item => {
     image.alt = item.name;
     cell.append(image);
   } else cell.textContent = item.name;
-  cell.title = item.name;
+  cell.title = item.name + (item.layer ? " · " + layerLabel(item.layer) : "");
   return cell;
 }));
 
