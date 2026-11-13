@@ -42,8 +42,14 @@ export function nextArrangement(previous = lastSong(), inspiration = null) {
   const preferred = eligible.filter(n => n !== previous);
   const choices = preferred.length ? preferred : eligible;
   if (!choices.length) return MAIN_SONGS.map((_, i) => i + 1).find(take => take !== previous) || 1;
-  const matching = choices.filter(take => inspiration?.mood?.includes(MAIN_SONGS[take - 1].mood));
-  const candidates = matching.length ? matching : choices;
+  const last = lastSong();
+  const previousSong = last > 0 ? MAIN_SONGS[songIndex(last)] : null;
+  const contrasting = previousSong
+    ? choices.filter(take => (MAIN_SONGS[take - 1].bpm < 110) !== (previousSong.bpm < 110))
+    : [];
+  const tempoChoices = contrasting.length ? contrasting : choices;
+  const matching = tempoChoices.filter(take => inspiration?.mood?.includes(MAIN_SONGS[take - 1].mood));
+  const candidates = matching.length ? matching : tempoChoices;
   const offset = inspiration?.seed || 0;
   return candidates[(Math.floor(Math.random() * candidates.length) + offset) % candidates.length] || 1;
 }
