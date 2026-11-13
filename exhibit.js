@@ -5,6 +5,7 @@ import { catalog } from "./items.js";
 import { layerCode } from "./audio-engine.js";
 import { SONGS } from "./music-catalog.js";
 import { RestartGesture } from "./restart-gesture.js";
+import { followHand } from "./hand-follow.js";
 
 /* ────────────────────────────────────────────────────────────
    화면 설계 (75인치 16:9 기준, 모든 값은 무대 크기에 대한 비율)
@@ -874,6 +875,9 @@ function moveTracked(tracked, error) {
       const ry = (point[1] - pose.shoulder[1]) / pose.span;
       net.tx = clamp(actor.tx + .05 + rx * .14, .03, .97);
       net.ty = clamp(.44 + ry * .2, .07, .96);
+      // 새 인식 결과를 받은 즉시 그물 위치 갱신. 렌더링마다 다시 지연시키지 않는다.
+      [net.x, net.y] = followHand(net.x, net.y, net.tx, net.ty, now - (net.handUpdatedAt ?? now - 33));
+      net.handUpdatedAt = now;
     }
     if (net.hasHand) {
       net.grip = pose.grip;
@@ -925,11 +929,11 @@ function interact(time) {
       net.ty = .5;
       net.closed = false;
     }
-    // 크게 움직일수록 빨리 따라붙고, 거의 멈춰 있을 때만 떨림을 걸러 낸다 (지연 감소).
-    const gap = Math.hypot(net.tx - net.x, (net.ty - net.y) * .56);
-    const follow = cameraActive ? clamp(.45 + gap * 9, .45, .9) : .6;
-    net.x = lerp(net.x, net.tx, follow);
-    net.y = lerp(net.y, net.ty, follow);
+    // 카메라는 입력 시 이미 위치를 갱신한다. 마우스 시연만 부드럽게 따라간다.
+    if (!cameraActive) {
+      net.x = lerp(net.x, net.tx, .6);
+      net.y = lerp(net.y, net.ty, .6);
+    }
     net.swish = Math.max(0, net.swish - .045);
     net.progress = 0;
 
