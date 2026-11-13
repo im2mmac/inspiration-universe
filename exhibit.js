@@ -1160,11 +1160,20 @@ function planConstellation(items) {
   }
   const now = new Date();
   const name = anonymousName(rand);
-  const label = now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) + " · 익명의 " + name;
+  const label = now.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" }) + " · " + pickMood() + " " + name;
   return { c: center, p: points, e: edges, label, name, t: now.getTime() };
 }
 
 // 구글 문서의 "익명의 고릴라"처럼, 오늘 하늘에서 겹치지 않는 동물 이름
+// 별자리 이름 앞에 붙는 말: "익명의"도 있고, 그날 그 순간의 기분 같은 말도
+const MOODS = ["익명의", "익명의", "세상 귀여운", "피곤한", "졸린", "신나는", "수줍은", "배고픈", "꿈꾸는", "들뜬",
+  "느긋한", "반짝이는", "용감한", "엉뚱한", "다정한", "춤추는", "노래하는", "길 잃은", "호기심 많은", "설레는",
+  "멍때리는", "콧노래 부르는", "살짝 삐진", "행복한", "부끄러운", "떠돌이", "잠 못 드는", "우주를 걷는"];
+function pickMood() {
+  const last = constellations.slice(-3).map(k => k.label);
+  const pool = MOODS.filter(m => !last.some(l => l?.includes(" " + m + " ")));
+  return pool[Math.floor(Math.random() * pool.length)] || "익명의";
+}
 const ANIMALS = ["고래", "수달", "펭귄", "여우", "부엉이", "판다", "고양이", "토끼", "해달", "다람쥐",
   "코알라", "기린", "고슴도치", "너구리", "알파카", "돌고래", "거북이", "치타", "나무늘보", "북극곰",
   "카멜레온", "플라밍고", "해마", "미어캣", "라쿤", "두더지", "앵무새", "고릴라", "캥거루", "오리너구리"];

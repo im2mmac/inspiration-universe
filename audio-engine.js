@@ -4,7 +4,7 @@
 // - 놓아주면 필터가 닫히며 한 마디에 걸쳐 멀어진다.
 // - 바탕 곡의 악기가 우선이고, 다른 곡의 드럼·퍼커션(음 높이 없음)과
 //   화음이 맞는 곡의 선율 악기, 이미 울리는 악기의 메아리 버전이 섞여 든다.
-import { BPM, COMPATIBLE, INSTRUMENTS, KIND, LAYERS, MAIN_SONGS, MIX_MELODIES, SONGS, STEM_GAIN, stemUrl } from "./music-catalog.js";
+import { BPM, COMPATIBLE, INSTRUMENTS, KIND, LAYERS, MAIN_SONGS, MIX_MELODIES, NATURAL_SOUNDS, SONGS, STEM_GAIN, stemUrl } from "./music-catalog.js";
 
 const BEAT = 60 / BPM;
 const BAR = BEAT * 4;
@@ -24,7 +24,7 @@ function compatibleLayer(layer, take) {
   if (!layer || !LAYERS.includes(layer.replace(/~e$/, ""))) return false;
   const base = MAIN_SONGS[songIndex(take)];
   const song = songOf(layer);
-  return KIND[stemOf(layer)] === "rhythm" || song.id === base.id ||
+  return song.id === "nature" || KIND[stemOf(layer)] === "rhythm" || song.id === base.id ||
     (song.key === base.key && (COMPATIBLE[base.id] || []).includes(song.id));
 }
 
@@ -95,6 +95,8 @@ export function chooseLayer(item, active, take, heard = [], rejected = null) {
   const base = MAIN_SONGS[songIndex(take)];
   const rejectedLayers = rejected instanceof Set ? rejected : new Set(rejected ? [rejected.replace(/~e$/, "")] : []);
   const allowed = layer => !rejectedLayers.has(layer.replace(/~e$/, ""));
+  const natural = NATURAL_SOUNDS[item.name];
+  if (natural && allowed(natural) && !active.includes(natural)) return natural;
   const used = new Set(active);
   const seen = new Set(heard);
   const recent = heard[heard.length - 1];
@@ -149,6 +151,7 @@ export function mapLayer(layer, fromTake, toTake, taken = new Set()) {
   const echo = layer.endsWith("~e");
   const song = songOf(layer), stem = stemOf(layer);
   const kind = KIND[stem];
+  if (song.id === "nature" && !taken.has(layer)) return layer;
   const friends = MIX_MELODIES ? MAIN_SONGS.map(s => s.id) : (COMPATIBLE[to.id] || []);
   // 다른 곡에서 온 리듬, 새 곡과 화음이 맞는 곡의 악기는 그대로 둔다
   if (song !== from && (kind === "rhythm" || song === to || friends.includes(song.id)) && !taken.has(layer)) return layer;
@@ -210,6 +213,7 @@ function voice(context, output, buffer, layer, base, when, offset) {
   const borrowed = song.id !== base;
   // 악기마다 고르게 맞춘 음량 (곡 믹스 비율 대신 각 악기가 들리도록)
   let level = .8 * (STEM_GAIN[layer.replace(/~e$/, "")] ?? 1) * (borrowed ? .85 : 1);
+  if (song.id === "nature") level *= .65;
   source.connect(filter);
   let last = filter;
   if (layer.endsWith("~e")) {
@@ -240,8 +244,10 @@ function balanceVoices(voices, at, fresh = null) {
       .filter(v => v.kind === "harmony" || v.kind === "lead" || v.kind === "echo")
       .sort((a, b) => b.born - a.born);
     const keep = new Set(pitched.slice(0, 2));
+    const natural = [...voices.values()].filter(v => v.kind === "nature").sort((a, b) => b.born - a.born);
+    const naturalFront = new Set(natural.slice(0, 2));
     for (const v of voices.values()) {
-      const back = (v.kind === "harmony" || v.kind === "lead" || v.kind === "echo") && !keep.has(v);
+      const back = ((v.kind === "harmony" || v.kind === "lead" || v.kind === "echo") && !keep.has(v)) || (v.kind === "nature" && !naturalFront.has(v));
       const weight = back ? .18 : 1;
       const tone = back ? 1800 : 20000;
       if (v !== fresh) {
@@ -399,7 +405,7 @@ export class UniverseAudio {
     const fromId = MAIN_SONGS[songIndex(from)].id;
     const others = [...this.items].filter(([, other]) => other !== item);
     const toId = MAIN_SONGS[songIndex(this.take)].id;
-    const stays = layer => !layer.startsWith(fromId + "/") && (KIND[stemOf(layer)] === "rhythm" || layer.startsWith(toId + "/")
+    const stays = layer => layer.startsWith("nature/") || !layer.startsWith(fromId + "/") && (KIND[stemOf(layer)] === "rhythm" || layer.startsWith(toId + "/")
       || (MIX_MELODIES || (COMPATIBLE[toId] || []).includes(layer.split("/")[0])));
     const taken = new Set(others.filter(([, o]) => stays(o.layer)).map(([, o]) => o.layer));
     const moved = [];
