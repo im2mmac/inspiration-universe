@@ -105,7 +105,7 @@ export function chooseLayer(item, active, take, heard = [], rejected = null) {
   const rejectedLayers = rejected instanceof Set ? rejected : new Set(rejected ? [rejected.replace(/~e$/, "")] : []);
   const allowed = layer => !rejectedLayers.has(layer.replace(/~e$/, ""));
   const natural = NATURAL_SOUNDS[item.name];
-  if (natural && allowed(natural) && !active.includes(natural)) return natural;
+  if (!item.replaceMelody && natural && allowed(natural) && !active.includes(natural)) return natural;
   const used = new Set(active);
   const seen = new Set(heard);
   const recent = heard[heard.length - 1];
@@ -132,6 +132,11 @@ export function chooseLayer(item, active, take, heard = [], rejected = null) {
     texture: [rhythmOk, friendly, own(["lead", "harmony"]), echoes, own(["low", "rhythm"])],
   };
   const tiers = plans[item.role] || plans.texture;
+  if (item.replaceMelody) {
+    // 멜로디 교체는 다른 실제 선율로만: 리듬이나 같은 원음의 메아리로 대체하지 않는다.
+    const melodies = [...own(["harmony", "lead"]), ...friendly];
+    return pickFrom(melodies, false) || pickFrom(melodies, true) || null;
+  }
   const everything = [...own(["low", "rhythm", "harmony", "lead"]), ...friendly, ...rhythmOk, ...echoes];
   if (rejected && item.role === "melody") {
     const melodies = [...own(["harmony", "lead"]), ...friendly, ...echoes];
@@ -371,14 +376,14 @@ export class UniverseAudio {
       this.vacant = false;
       item.anchor = true;
     }
-    const candidate = this.replaceMelody ? { ...item, role: "melody" } : item;
+    const candidate = this.replaceMelody ? { ...item, role: "melody", replaceMelody: true } : item;
     const reusable = !this.replaceMelody && compatibleLayer(item.layer, this.take) &&
       !this.rejected.has(item.layer.replace(/~e$/, ""));
     let layer = reusable ? item.layer : chooseLayer(candidate, this.active, this.take, this.heard, this.rejected);
     // 이 곡의 대체 재료까지 모두 지웠다면 다른 곡으로 넘어간다.
     if (!layer) {
-      switched = this.switchSong(item);
-      layer = chooseLayer(candidate, this.active, this.take, this.heard, this.rejected);
+      switched = this.switchSong(item, candidate.replaceMelody);
+      layer = this.reservedMelody || chooseLayer(candidate, this.active, this.take, this.heard, this.rejected);
     }
     this.replaceMelody = false;
     item.layer = layer;
@@ -422,7 +427,7 @@ export class UniverseAudio {
   }
 
   // 바탕 곡을 다른 곡으로 바꾸고, 남은 악기를 새 곡의 악기로 다음 마디에 갈아 끼운다
-  switchSong(item) {
+  switchSong(item, reserveMelody = false) {
     const from = this.take;
     this.take = nextArrangement(this.take, item);
     if (this.take === from) this.take = from % MAIN_SONGS.length + 1;
@@ -437,9 +442,11 @@ export class UniverseAudio {
     const toId = MAIN_SONGS[songIndex(this.take)].id;
     const stays = layer => !layer.startsWith(fromId + "/") && !layer.startsWith("nature/") && compatibleLayer(layer, this.take);
     const taken = new Set(others.filter(([, o]) => stays(o.layer)).map(([, o]) => o.layer));
+    this.reservedMelody = reserveMelody ? chooseLayer({ ...item, replaceMelody: true }, [], this.take) : null;
+    if (this.reservedMelody) taken.add(this.reservedMelody);
     const moved = [];
     for (const [id, other] of others) {
-      const next = stays(other.layer) ? other.layer : mapLayer(other.layer, from, this.take, taken);
+      const next = stays(other.layer) && other.layer !== this.reservedMelody ? other.layer : mapLayer(other.layer, from, this.take, taken);
       taken.add(next);
       moved.push([id, other, next]);
     }
@@ -471,7 +478,7 @@ export class UniverseAudio {
     if (item.layer) {
       this.rejected.add(item.layer.replace(/~e$/, ""));
       const kind = KIND[stemOf(item.layer)];
-      this.replaceMelody = kind === "harmony" || kind === "lead";
+      this.replaceMelody ||= kind === "harmony" || kind === "lead";
     }
     const index = this.active.indexOf(item.layer);
     if (index >= 0) this.active.splice(index, 1);
