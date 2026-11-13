@@ -401,3 +401,6 @@
 @media (prefers-reduced-motion: reduce) {
   .stage .art-mosaic, .stage .art-mosaic i { animation: none; }
 }
+
+/* 영감의 성운: 낚은 영감이 별가루가 되어 떠 있는 캔버스 (art-particles.js) */
+.stage .art-canvas { z-index: 2; mix-blend-mode: screen; }

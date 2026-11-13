@@ -1,5 +1,6 @@
 import { UniverseAudio } from "./audio-engine.js";
 import { WristCamera } from "./camera.js";
+import { ArtField } from "./art-particles.js";
 import { catalog } from "./items.js";
 import { layerCode } from "./audio-engine.js";
 import { SONGS } from "./music-catalog.js";
@@ -44,6 +45,7 @@ const slots = byId("slots");
 const actorsLayer = byId("actors");
 const fx = byId("fx");
 const starsCanvas = byId("stars");
+const artField = new ArtField(byId("art"));
 const audio = new UniverseAudio();
 const tracker = new WristCamera(byId("camera-feed"), moveTracked);
 
@@ -95,6 +97,8 @@ function resize() {
     canvas.width = Math.round(rect.width * dpr);
     canvas.height = Math.round(rect.height * dpr);
   }
+  artField.lite = stage.classList.contains("lite");
+  artField.resize(rect.width, rect.height, dpr);
 }
 
 /* ── 재료 표시 ──────────────────────────────────────── */
@@ -536,47 +540,19 @@ function nextBeat() {
   return performance.now() + audio.nextJoinDelay() * 1000;
 }
 
+// 낚은 영감은 별가루가 되어 우주 배경에 성운처럼 떠 있는다 (art-particles.js)
 function drawLayers() {
-  const container = byId("art-layers");
-  const items = slotsList.filter(Boolean);
-  const active = new Set(items.map(item => String(item.id)));
-  for (const layer of container.children) {
-    if (!active.has(layer.dataset.item)) layer.remove();
-  }
-  for (const item of items) {
-    if (Array.from(container.children).some(layer => layer.dataset.item === String(item.id))) continue;
-    const imagePool = catalog.filter(candidate => candidate.kind === "image" && candidate.role === item.role);
-    const fallback = catalog.filter(candidate => candidate.kind === "image");
-    const pool = imagePool.length ? imagePool : fallback;
-    const source = item.kind === "image" ? item : pool[item.seed % pool.length];
-    if (!source) continue;
-    const ghost = document.createElement("span");
-    const angle = item.slot * 2.39996 + item.seed * .07;
-    const radius = .19 + (item.seed % 4) * .045;
-    ghost.className = "art-layer artwork";
-    ghost.dataset.item = String(item.id);
-    ghost.setAttribute("aria-hidden", "true");
-    ghost.style.setProperty("--x", (50 + 100 * radius * Math.cos(angle)) + "%");
-    ghost.style.setProperty("--y", (36 + 100 * radius * .62 * Math.sin(angle)) + "%");
-    ghost.style.setProperty("--turn", (item.seed % 9 * 9 - 36) + "deg");
-    ghost.style.setProperty("--player", PLAYERS[item.player].color);
-    ghost.style.setProperty("--cycle", (16 + item.seed % 9) + "s");
-    ghost.style.setProperty("--delay", Math.max(0, item.joinAt - performance.now()) + "ms");
-    const mosaic = document.createElement("span");
-    mosaic.className = "art-mosaic";
-    for (let piece = 0; piece < 9; piece++) {
-      const tile = document.createElement("i");
-      const x = piece % 3, y = Math.floor(piece / 3);
-      tile.style.backgroundImage = `url("./assets/${source.image}.webp")`;
-      tile.style.backgroundPosition = `${x * 50}% ${y * 50}%`;
-      tile.style.setProperty("--dx", ((x - 1) * (3 + item.seed % 4)) + "cqw");
-      tile.style.setProperty("--dy", ((y - 1) * (3 + piece % 3)) + "cqw");
-      tile.style.setProperty("--spin", ((piece % 2 ? 1 : -1) * (30 + item.seed % 60)) + "deg");
-      mosaic.append(tile);
-    }
-    ghost.append(mosaic);
-    container.append(ghost);
-  }
+  const bounds = stage.getBoundingClientRect();
+  artField.sync(slotsList.filter(Boolean), {
+    colors: PLAYERS.map(p => p.color),
+    tints: ROLE_TINT,
+    origin(item) {
+      const cell = slots.children[item.slot];
+      if (!cell) return [.5, .95];
+      const r = cell.getBoundingClientRect();
+      return [(r.left + r.width / 2 - bounds.left) / bounds.width, (r.top + r.height / 2 - bounds.top) / bounds.height];
+    },
+  });
 }
 
 function drawTray(fresh = -1) {
@@ -1024,7 +1000,9 @@ function frame(time) {
   warp = Math.max(0, warp - dt * .0016);
   drawStars(dt);
   drawFx(time, dt);
-  stage.style.setProperty("--energy", Math.min(.85, audio.energy() * 2).toFixed(2));
+  const energy = Math.min(.85, audio.energy() * 2);
+  artField.draw(time, { energy, beat: beatPulse, state });
+  stage.style.setProperty("--energy", energy.toFixed(2));
   requestAnimationFrame(frame);
 }
 
