@@ -1,3 +1,10 @@
+// 중앙의 정밀도는 유지하고 팔을 바깥으로 뻗을수록 이동 범위를 넓힌다.
+export function netTarget(actorX, rx, ry) {
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const reach = rx * .14 + Math.sign(rx) * Math.max(0, Math.abs(rx) - .55) * .18;
+  return [clamp(actorX + .05 + reach, .02, .98), clamp(.44 + ry * .24, .035, .96)];
+}
+
 // 인식 결과가 도착할 때 한 번만 보정한다. 큰 이동은 즉시, 정지 부근만 떨림 완화.
 export function followHand(x, y, tx, ty, elapsed = 33) {
   const gap = Math.hypot(tx - x, (ty - y) * .56);

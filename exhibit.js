@@ -5,7 +5,7 @@ import { catalog } from "./items.js";
 import { layerCode } from "./audio-engine.js";
 import { SONGS } from "./music-catalog.js";
 import { RestartGesture } from "./restart-gesture.js";
-import { followHand } from "./hand-follow.js";
+import { followHand, netTarget } from "./hand-follow.js";
 
 /* ────────────────────────────────────────────────────────────
    화면 설계 (75인치 16:9 기준, 모든 값은 무대 크기에 대한 비율)
@@ -469,7 +469,10 @@ function targetOf(player) {
     if (!f.ready) continue;
     const [fx_, fy] = px(f.x, f.y);
     const d = Math.hypot(fx_ - nx, fy - ny);
-    if (d < hoopRadius() + radiusOf(f) * .55 && d < bestD) { best = f; bestD = d; }
+    // 가장자리에서 그물 일부가 화면 밖으로 잘려도 잡기 쉬운 작은 여유를 준다.
+    const edge = Math.min(f.x, 1 - f.x, f.y, 1 - f.y);
+    const assist = cameraActive ? clamp((.16 - edge) / .1, 0, 1) * size.w * .012 : 0;
+    if (d < hoopRadius() + radiusOf(f) * .55 + assist && d < bestD) { best = f; bestD = d; }
   }
   return best;
 }
@@ -873,8 +876,7 @@ function moveTracked(tracked, error) {
       // 어깨 기준 상대 위치로 그물을 움직여, 작은 동작으로도 화면 위쪽까지 닿게 한다.
       const rx = (point[0] - pose.shoulder[0]) * (4 / 3) / pose.span;
       const ry = (point[1] - pose.shoulder[1]) / pose.span;
-      net.tx = clamp(actor.tx + .05 + rx * .14, .03, .97);
-      net.ty = clamp(.44 + ry * .2, .07, .96);
+      [net.tx, net.ty] = netTarget(actor.tx, rx, ry);
       // 새 인식 결과를 받은 즉시 그물 위치 갱신. 렌더링마다 다시 지연시키지 않는다.
       [net.x, net.y] = followHand(net.x, net.y, net.tx, net.ty, now - (net.handUpdatedAt ?? now - 33));
       net.handUpdatedAt = now;
