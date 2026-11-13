@@ -1397,6 +1397,7 @@ byId("camera").addEventListener("click", async () => {
   await startCamera();
 });
 
+let cameraRetries = 0;
 async function startCamera() {
   const button = byId("camera");
   button.disabled = true;
@@ -1418,12 +1419,18 @@ async function startCamera() {
       NotAllowedError: "카메라 권한이 막혀 있어요. 주소창 왼쪽에서 카메라를 허용하거나, 윈도우 설정 → 개인 정보 → 카메라를 켜 주세요.",
       NotFoundError: "연결된 웹캠을 찾지 못했어요. 웹캠 연결을 확인해 주세요.",
       NotReadableError: "다른 프로그램(줌, OBS, 카메라 앱 등)이 웹캠을 쓰고 있거나 윈도우가 막고 있어요. 그 프로그램을 닫아 주세요.",
+      AbortError: "웹캠이 응답하지 않아요. 카메라 앱·줌·OBS를 모두 닫고, 웹캠을 PC 본체 USB에 다시 꽂아 주세요. 잠시 뒤 자동으로 다시 시도해요.",
       OverconstrainedError: "웹캠이 요청한 화면 크기를 지원하지 않아요.",
       ModelLoadError: "웹캠은 켜졌지만 손 인식 모델을 못 받았어요. 인터넷 연결을 확인하거나 vendor/models 파일을 받아 두세요.",
       SecurityError: "이 주소에서는 카메라를 쓸 수 없어요. https 주소나 127.0.0.1 로 열어 주세요.",
     };
     status((reasons[error.name] || "카메라를 켤 수 없어요 (" + error.name + ": " + error.message + ").") + " 화면을 눌러 마우스로도 참여할 수 있어요.");
     console.error("[영감의 우주] 카메라 오류", error);
+    // 웹캠이 늦게 깨어나거나 다른 앱이 막 놓아준 경우: 몇 번 더 저절로 시도한다
+    if ((error.name === "AbortError" || error.name === "NotReadableError") && cameraRetries < 4) {
+      cameraRetries += 1;
+      setTimeout(() => { if (!tracker?.stream) startCamera(); }, 4000);
+    }
   } finally { button.disabled = false; }
 }
 byId("save").addEventListener("click", async () => {

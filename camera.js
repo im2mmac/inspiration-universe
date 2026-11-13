@@ -55,10 +55,7 @@ export class WristCamera {
       throw error;
     }
     if (this.stream) return;
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 }, facingMode: "user" },
-      audio: false,
-    });
+    this.stream = await openCamera();
     this.video.srcObject = this.stream;
     try {
       await this.video.play();
@@ -207,4 +204,43 @@ export class WristCamera {
     });
     return result;
   }
+}
+
+// 카메라 열기: 먼저 기본 설정으로, 안 되면(다른 앱이 붙잡고 있거나, 해상도가 안 맞거나,
+// 가상 카메라가 기본으로 잡혀 있는 경우) 조건을 풀고 연결된 카메라를 하나씩 시도한다.
+// 성공한 카메라는 기억해 두고 다음부터 먼저 쓴다.
+const CAMERA_KEY = "inspiration-universe-camera";
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function openCamera() {
+  const base = { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } };
+  let saved = null;
+  try { saved = localStorage.getItem(CAMERA_KEY); } catch {}
+  const tries = [];
+  if (saved) tries.push({ ...base, deviceId: { exact: saved } });
+  tries.push({ ...base, facingMode: "user" });
+  let firstError = null;
+  const attempt = async video => {
+    const stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+    const id = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
+    try { if (id) localStorage.setItem(CAMERA_KEY, id); } catch {}
+    return stream;
+  };
+  for (const video of tries) {
+    try { return await attempt(video); } catch (error) {
+      firstError ||= error;
+      if (error?.name === "NotAllowedError" || error?.name === "SecurityError") throw error;
+    }
+  }
+  // 조건 없이 한 번 더(잠깐 기다렸다가: 방금 닫은 앱이 카메라를 놓아주는 시간)
+  await wait(800);
+  try { return await attempt(true); } catch (error) { firstError ||= error; }
+  // 연결된 카메라를 하나씩
+  let cameras = [];
+  try { cameras = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput"); } catch {}
+  for (const camera of cameras) {
+    if (!camera.deviceId) continue;
+    try { return await attempt({ deviceId: { exact: camera.deviceId } }); } catch {}
+    try { return await attempt({ deviceId: { exact: camera.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }); } catch {}
+  }
+  throw firstError || new Error("카메라를 찾지 못했어요");
 }
