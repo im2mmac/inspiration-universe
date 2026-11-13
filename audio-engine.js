@@ -11,11 +11,20 @@ const BAR = BEAT * 4;
 const MASTER = .85;
 const LAST_KEY = "inspiration-universe-last-song";
 const BORROW_RHYTHM_LIMIT = 2;   // 다른 곡 리듬은 동시에 두 줄까지
-const ECHO_LEVEL = .5;
+const ECHO_LEVEL = .3;
 
 const songIndex = take => take > 0 ? (take - 1) % MAIN_SONGS.length : 0;
 const songOf = layer => SONGS.find(song => song.id === layer.split("/")[0]);
 const stemOf = layer => layer.split("/")[1].replace(/~e$/, "");
+
+// 저장된 QR과 곡 전환에서도 조성이 다른 선율을 차단한다.
+function compatibleLayer(layer, take) {
+  if (!layer || !LAYERS.includes(layer.replace(/~e$/, ""))) return false;
+  const base = MAIN_SONGS[songIndex(take)];
+  const song = songOf(layer);
+  return KIND[stemOf(layer)] === "rhythm" || song.id === base.id ||
+    (song.key === base.key && (COMPATIBLE[base.id] || []).includes(song.id));
+}
 
 function lastSong() {
   try { return Number(localStorage.getItem(LAST_KEY)) || 0; } catch { return 0; }
@@ -81,7 +90,7 @@ export function chooseLayer(item, active, take, heard = []) {
     texture: [rhythmOk, friendly, own(["lead", "harmony"]), echoes, own(["low", "rhythm"])],
   };
   const tiers = plans[item.role] || plans.texture;
-  const everything = [...own(["low", "rhythm", "harmony", "lead"]), ...friendly, ...borrowedRhythm, ...echoes];
+  const everything = [...own(["low", "rhythm", "harmony", "lead"]), ...friendly, ...rhythmOk, ...echoes];
   // 1) 역할에 맞으면서 아직 안 나온 악기 → 2) 어디서든 아직 안 나온 악기 → 3) 방금 놓은 것만 빼고 다시
   for (const allowSeen of [false, true]) {
     for (const list of tiers) {
@@ -117,7 +126,7 @@ export function mapLayer(layer, fromTake, toTake, taken = new Set()) {
   // 새 곡에 남는 악기가 없으면: 새 곡 선율의 메아리 → 다른 곡의 같은 성격 악기
   const echoes = to.stems.filter(s => KIND[s] !== "rhythm" && KIND[s] !== "low").map(s => to.id + "/" + s + "~e").filter(l => !taken.has(l));
   if (echoes.length) return echoes[0];
-  const elsewhere = LAYERS.filter(l => KIND[stemOf(l)] === kind && !taken.has(l));
+  const elsewhere = LAYERS.filter(l => KIND[stemOf(l)] === kind && compatibleLayer(l, toTake) && !taken.has(l));
   return elsewhere[0] || to.id + "/" + to.stems[0] + "~e";
 }
 
@@ -185,6 +194,39 @@ function voice(context, output, buffer, layer, base, when, offset) {
   source.start(when, offset % buffer.duration);
   const kind = layer.endsWith("~e") ? "echo" : KIND[layer.split("/")[1]];
   return { source, filter, gain, level, layer, kind, born: when, weight: 1 };
+}
+
+function balanceVoices(voices, at, fresh = null) {
+    const pitched = [...voices.values()]
+      .filter(v => v.kind === "harmony" || v.kind === "lead" || v.kind === "echo")
+      .sort((a, b) => b.born - a.born);
+    const keep = new Set(pitched.slice(0, 2));
+    for (const v of voices.values()) {
+      const back = (v.kind === "harmony" || v.kind === "lead" || v.kind === "echo") && !keep.has(v);
+      const weight = back ? .18 : 1;
+      const tone = back ? 1800 : 20000;
+      if (v !== fresh) {
+        v.gain.gain.cancelScheduledValues(at);
+        v.filter.frequency.cancelScheduledValues(at);
+      }
+      if (v === fresh) {
+        // 들어온 순간부터 두 마디는 조금 크게, 그다음 제자리로
+        v.gain.gain.setValueAtTime(v.level * 1.1, at + .01);
+        v.gain.gain.setValueAtTime(v.level * 1.1, at + 2 * BAR);
+        v.gain.gain.linearRampToValueAtTime(v.level * weight, at + 2 * BAR + BEAT);
+      } else if (v.weight !== weight) {
+        v.gain.gain.cancelScheduledValues(at);
+        v.gain.gain.setTargetAtTime(v.level * weight, at, .35);
+        v.filter.frequency.cancelScheduledValues(at);
+        v.filter.frequency.setTargetAtTime(tone, at, .35);
+      }
+      // 새 악기가 들어오는 두 마디 동안 나머지는 살짝 물러나 자리를 내준다
+      if (fresh && v !== fresh) {
+        v.gain.gain.setTargetAtTime(v.level * weight * .72, at, .15);
+        v.gain.gain.setTargetAtTime(v.level * weight, at + 2 * BAR, .5);
+      }
+      v.weight = weight;
+    }
 }
 
 export class UniverseAudio {
@@ -259,7 +301,7 @@ export class UniverseAudio {
       this.vacant = false;
       item.anchor = true;
     }
-    const layer = item.layer || chooseLayer(item, this.active, this.take, this.heard);
+    const layer = compatibleLayer(item.layer, this.take) ? item.layer : chooseLayer(item, this.active, this.take, this.heard);
     item.layer = layer;
     item.soundLabel = layerLabel(layer, this.base);
     this.items.set(item.id, item);
@@ -290,32 +332,7 @@ export class UniverseAudio {
   // 새로 들어온 악기가 들리게: 두 마디 동안 앞으로 나오고,
   // 선율·화음 악기는 최근 두 줄만 또렷하게, 오래된 것은 뒤로 물러난다 (리듬·베이스는 그대로).
   rebalance(at, fresh = null) {
-    const pitched = [...this.voices.values()]
-      .filter(v => v.kind === "harmony" || v.kind === "lead" || v.kind === "echo")
-      .sort((a, b) => b.born - a.born);
-    const keep = new Set(pitched.slice(0, 2));
-    for (const v of this.voices.values()) {
-      const back = (v.kind === "harmony" || v.kind === "lead" || v.kind === "echo") && !keep.has(v);
-      const weight = back ? .5 : 1;
-      const tone = back ? 3200 : 20000;
-      if (v === fresh) {
-        // 들어온 순간부터 두 마디는 조금 크게, 그다음 제자리로
-        v.gain.gain.setValueAtTime(v.level * 1.3, at + .01);
-        v.gain.gain.setValueAtTime(v.level * 1.3, at + 2 * BAR);
-        v.gain.gain.linearRampToValueAtTime(v.level * weight, at + 2 * BAR + BEAT);
-      } else if (v.weight !== weight) {
-        v.gain.gain.cancelScheduledValues(at);
-        v.gain.gain.setTargetAtTime(v.level * weight, at, .35);
-        v.filter.frequency.cancelScheduledValues(at);
-        v.filter.frequency.setTargetAtTime(tone, at, .35);
-      }
-      // 새 악기가 들어오는 두 마디 동안 나머지는 살짝 물러나 자리를 내준다
-      if (fresh && v !== fresh) {
-        v.gain.gain.setTargetAtTime(v.level * weight * .72, at, .15);
-        v.gain.gain.setTargetAtTime(v.level * weight, at + 2 * BAR, .5);
-      }
-      v.weight = weight;
-    }
+    balanceVoices(this.voices, at, fresh);
   }
 
   // 바탕 곡을 다른 곡으로 바꾸고, 남은 악기를 새 곡의 악기로 다음 마디에 갈아 끼운다
@@ -431,7 +448,7 @@ export class UniverseAudio {
     const ordered = [...items].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0));
     const active = [];
     for (const item of ordered) {
-      if (!item.layer) item.layer = chooseLayer(item, active, this.take);
+      if (!compatibleLayer(item.layer, this.take)) item.layer = chooseLayer(item, active, this.take);
       active.push(item.layer);
     }
     const rate = 48000;
@@ -443,6 +460,7 @@ export class UniverseAudio {
     const bus = mixBus(context, .76);
     bus.output.connect(context.destination);
     const loaded = await Promise.all(ordered.map(item => loadStem(decoder, item.layer).catch(() => null)));
+    const renderedVoices = new Map();
     ordered.forEach((item, i) => {
       if (!loaded[i]) return;
       const at = i * enter;
@@ -451,6 +469,8 @@ export class UniverseAudio {
       v.filter.frequency.exponentialRampToValueAtTime(20000, at + BEAT);
       v.gain.gain.setValueAtTime(0, at);
       v.gain.gain.linearRampToValueAtTime(v.level, at + BEAT);
+      renderedVoices.set(item.id ?? i, v);
+      balanceVoices(renderedVoices, at + BEAT, v);
     });
     bus.output.gain.setValueAtTime(.76, seconds - 2 * BAR);
     bus.output.gain.linearRampToValueAtTime(0, seconds);
