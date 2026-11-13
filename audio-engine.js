@@ -234,7 +234,7 @@ function voice(context, output, buffer, layer, base, when, offset) {
     level *= ECHO_LEVEL;
   }
   last.connect(gain).connect(output);
-  source.start(when, offset % buffer.duration);
+  source.start(when, song.id === "nature" ? 0 : offset % buffer.duration);
   const kind = layer.endsWith("~e") ? "echo" : KIND[layer.split("/")[1]];
   return { source, filter, gain, level, layer, kind, born: when, weight: 1 };
 }
@@ -371,7 +371,8 @@ export class UniverseAudio {
     const context = this.context;
     void loadStem(context, layer).then(buffer => {
       if (item.layer !== layer || !this.items.has(item.id) || this.voices.has(item.id) || this.closed) return;
-      const now = Math.max(context.currentTime + .03, at ?? 0);
+      const requested = Math.max(context.currentTime + .03, at ?? 0);
+      const now = layer.startsWith("nature/") ? this.nextBeatTime(requested) : requested;
       if (this.origin === null) this.origin = now;
       if (!this.fixedTake) recordPlayedSong(this.take);
       const v = voice(context, this.bus.input, buffer, layer, this.base, now, this.position(now));
