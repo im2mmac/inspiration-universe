@@ -569,7 +569,9 @@ function drawLayers() {
     ghost.style.setProperty("--y", (36 + 100 * radius * .62 * Math.sin(angle)) + "%");
     ghost.style.setProperty("--turn", (item.seed % 9 * 9 - 36) + "deg");
     ghost.style.setProperty("--player", PLAYERS[item.player].color);
-    ghost.style.setProperty("--cycle", (16 + item.seed % 9) + "s");
+    ghost.style.setProperty("--cycle", (24 + item.seed % 7 * 2.6) + "s");
+    ghost.style.setProperty("--tumble", ["art-tumble-y", "art-tumble-x", "art-wobble", "art-swirl"][(item.seed >> 1) % 4]);
+    ghost.style.setProperty("--spin", (22 + item.seed % 5 * 4) + "s");
     ghost.style.setProperty("--delay", Math.max(0, item.joinAt - performance.now()) + "ms");
     const mosaic = document.createElement("span");
     mosaic.className = "art-mosaic";
@@ -580,7 +582,7 @@ function drawLayers() {
       tile.style.backgroundPosition = `${x * 50}% ${y * 50}%`;
       tile.style.setProperty("--dx", ((x - 1) * (3 + item.seed % 4)) + "cqw");
       tile.style.setProperty("--dy", ((y - 1) * (3 + piece % 3)) + "cqw");
-      tile.style.setProperty("--spin", ((piece % 2 ? 1 : -1) * (30 + item.seed % 60)) + "deg");
+      tile.style.setProperty("--spin-tile", ((piece % 2 ? 1 : -1) * (30 + item.seed % 60)) + "deg");
       mosaic.append(tile);
     }
     ghost.append(mosaic);

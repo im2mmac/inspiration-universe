@@ -378,11 +378,12 @@
 }
 
 /* 영감별 이미지가 조각으로 흩어졌다 모이며 합주의 배경을 만든다. */
-.stage .art-layer.artwork { width: 24cqw; height: 24cqw; }
+.stage .art-layer.artwork { width: 18cqw; height: 18cqw; }
 .stage .art-mosaic {
   display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; height: 100%;
-  animation: art-orbit var(--cycle) linear infinite;
-  animation-delay: var(--delay);
+  /* 여정(커지며 다가오다 흩어지고 다시 작게) + 축 회전(Y·X·흔들림·맴돌기) */
+  animation: art-orbit var(--cycle) ease-in-out infinite, var(--tumble, art-tumble-y) var(--spin, 30s) linear infinite;
+  animation-delay: var(--delay), var(--delay);
 }
 .stage .art-mosaic i {
   display: block; background-size: 300% 300%; background-repeat: no-repeat;
@@ -390,14 +391,40 @@
   animation-delay: var(--delay);
 }
 @keyframes art-orbit {
-  0%, 100% { rotate: -12deg; scale: 1; }
-  50% { rotate: 32deg; scale: 1.16; }
+  0% { scale: .6; opacity: 0; }
+  8% { opacity: 1; }
+  68% { scale: 1.45; opacity: 1; }
+  88% { scale: 1.8; opacity: 0; }
+  100% { scale: .6; opacity: 0; }
+}
+@keyframes art-tumble-y {
+  from { transform: perspective(60cqw) rotateY(0deg) rotateX(8deg); }
+  50% { transform: perspective(60cqw) rotateY(180deg) rotateX(-10deg); }
+  to { transform: perspective(60cqw) rotateY(360deg) rotateX(8deg); }
+}
+@keyframes art-tumble-x {
+  from { transform: perspective(60cqw) rotateX(0deg) rotateY(-10deg); }
+  50% { transform: perspective(60cqw) rotateX(180deg) rotateY(12deg); }
+  to { transform: perspective(60cqw) rotateX(360deg) rotateY(-10deg); }
+}
+@keyframes art-wobble {
+  0%, 100% { transform: perspective(60cqw) rotateY(-50deg) rotateX(20deg) rotate(-8deg); }
+  25% { transform: perspective(60cqw) rotateY(10deg) rotateX(-35deg) rotate(6deg); }
+  50% { transform: perspective(60cqw) rotateY(55deg) rotateX(10deg) rotate(14deg); }
+  75% { transform: perspective(60cqw) rotateY(-5deg) rotateX(40deg) rotate(-4deg); }
+}
+@keyframes art-swirl {
+  from { transform: perspective(60cqw) rotate(0deg) rotateY(20deg); }
+  50% { transform: perspective(60cqw) rotate(180deg) rotateY(-20deg); }
+  to { transform: perspective(60cqw) rotate(360deg) rotateY(20deg); }
 }
 @keyframes art-disperse {
-  0%, 18%, 100% { transform: translate(0, 0) rotate(0); opacity: 1; border-radius: 0; }
-  55%, 70% { transform: translate(var(--dx), var(--dy)) rotate(var(--spin)) scale(.35); opacity: .25; border-radius: 50%; }
+  0%, 30%, 100% { transform: translate(0, 0) rotate(0); opacity: 1; border-radius: 0; }
+  62% { transform: translate(calc(var(--dx) * .5), calc(var(--dy) * .5)) rotate(calc(var(--spin-tile) * .5)) scale(.8); opacity: .8; border-radius: 12%; }
+  86% { transform: translate(calc(var(--dx) * 2.2), calc(var(--dy) * 2.2)) rotate(var(--spin-tile)) scale(.35); opacity: 0; border-radius: 50%; }
 }
 .stage.lite .art-mosaic i { animation: none; }
+.stage.lite .art-mosaic { animation-name: art-orbit, none; }
 @media (prefers-reduced-motion: reduce) {
   .stage .art-mosaic, .stage .art-mosaic i { animation: none; }
 }
