@@ -10,6 +10,8 @@ const BEAT = 60 / BPM;
 const BAR = BEAT * 4;
 const MASTER = .85;
 const LAST_KEY = "inspiration-universe-last-song";
+const ROTATION_KEY = "inspiration-universe-played-songs";
+let playedSongs = [];
 const BORROW_RHYTHM_LIMIT = 2;   // 다른 곡 리듬은 동시에 두 줄까지
 const ECHO_LEVEL = .3;
 
@@ -32,8 +34,35 @@ function lastSong() {
 
 // take는 바탕 곡 번호(1부터). 이름은 예전 코드와 맞추려고 그대로 둔다.
 export function nextArrangement(previous = lastSong()) {
-  const choices = MAIN_SONGS.map((_, i) => i + 1).filter(n => n !== previous);
+  const played = readPlayedSongs();
+  const remaining = MAIN_SONGS.map((song, i) => ({ id: song.id, take: i + 1 }))
+    .filter(song => !played.includes(song.id));
+  const pool = remaining.length ? remaining : MAIN_SONGS.map((song, i) => ({ id: song.id, take: i + 1 }));
+  const eligible = pool.map(song => song.take).filter(n => n !== lastSong());
+  const preferred = eligible.filter(n => n !== previous);
+  const choices = preferred.length ? preferred : eligible;
+  if (!choices.length) return pool[0].take;
   return choices[Math.floor(Math.random() * choices.length)] || 1;
+}
+
+function readPlayedSongs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ROTATION_KEY) || "[]");
+    if (Array.isArray(saved)) playedSongs = [...new Set(saved.filter(id => MAIN_SONGS.some(song => song.id === id)))];
+  } catch {}
+  return playedSongs;
+}
+
+// 미리 고르거나 불러온 곡은 제외하고, 실제 소리가 시작된 곡만 순환에 기록한다.
+function recordPlayedSong(take) {
+  const id = MAIN_SONGS[songIndex(take)].id;
+  const played = readPlayedSongs();
+  if (played.length === MAIN_SONGS.length && lastSong() !== take) playedSongs = [id];
+  else if (!played.includes(id)) playedSongs = [...played, id];
+  try {
+    localStorage.setItem(ROTATION_KEY, JSON.stringify(playedSongs));
+    localStorage.setItem(LAST_KEY, String(take));
+  } catch {}
 }
 
 export function arrangementName(take) {
@@ -332,7 +361,7 @@ export class UniverseAudio {
       if (item.layer !== layer || !this.items.has(item.id) || this.voices.has(item.id) || this.closed) return;
       const now = Math.max(context.currentTime + .03, at ?? 0);
       if (this.origin === null) this.origin = now;
-      try { localStorage.setItem(LAST_KEY, String(this.take)); } catch {}
+      if (!this.fixedTake) recordPlayedSong(this.take);
       const v = voice(context, this.bus.input, buffer, layer, this.base, now, this.position(now));
       const arrive = at ? now + BEAT : Math.max(now + .35, this.nextBeatTime(now + .2));
       v.filter.frequency.setValueAtTime(700, now);
