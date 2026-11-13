@@ -9,3 +9,7 @@
 - Rain.wav — kyles, rain light on tin roof soft.flac. https://freesound.org/people/kyles/sounds/451152/
 
 원본의 음높이를 유지하고 시작·끝을 짧게 페이드 처리했다. 자연음은 바탕 곡 목록에 포함하지 않으며 영감 이름으로 연결한다.
+
+73·74·75·149·150 BPM 폴더는 원음의 음높이와 발성 길이를 보존하면서 울음의 배치 간격을 변경한 버전이다. 빗소리 길이는 각 BPM의 8마디로 맞췄다.
+
+- Thunder.wav — kingsrow, 2016-10-06 Thunder Crack.wav (CC0). https://freesound.org/people/kingsrow/sounds/361772/

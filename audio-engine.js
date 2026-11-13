@@ -24,7 +24,7 @@ function compatibleLayer(layer, take) {
   if (!layer || !LAYERS.includes(layer.replace(/~e$/, ""))) return false;
   const base = MAIN_SONGS[songIndex(take)];
   const song = songOf(layer);
-  return song.id === "nature" || KIND[stemOf(layer)] === "rhythm" || song.id === base.id ||
+  return song.id === "nature" || (KIND[stemOf(layer)] === "rhythm" && song.bpm === base.bpm) || song.id === base.id ||
     (song.key === base.key && (COMPATIBLE[base.id] || []).includes(song.id));
 }
 
@@ -33,7 +33,7 @@ function lastSong() {
 }
 
 // take는 바탕 곡 번호(1부터). 이름은 예전 코드와 맞추려고 그대로 둔다.
-export function nextArrangement(previous = lastSong()) {
+export function nextArrangement(previous = lastSong(), inspiration = null) {
   const played = readPlayedSongs();
   const remaining = MAIN_SONGS.map((song, i) => ({ id: song.id, take: i + 1 }))
     .filter(song => !played.includes(song.id));
@@ -42,7 +42,10 @@ export function nextArrangement(previous = lastSong()) {
   const preferred = eligible.filter(n => n !== previous);
   const choices = preferred.length ? preferred : eligible;
   if (!choices.length) return MAIN_SONGS.map((_, i) => i + 1).find(take => take !== previous) || 1;
-  return choices[Math.floor(Math.random() * choices.length)] || 1;
+  const matching = choices.filter(take => inspiration?.mood?.includes(MAIN_SONGS[take - 1].mood));
+  const candidates = matching.length ? matching : choices;
+  const offset = inspiration?.seed || 0;
+  return candidates[(Math.floor(Math.random() * candidates.length) + offset) % candidates.length] || 1;
 }
 
 function readPlayedSongs() {
@@ -105,7 +108,7 @@ export function chooseLayer(item, active, take, heard = [], rejected = null) {
     return free.length ? free[(item.seed * 7 + active.length + heard.length) % free.length] : null;
   };
   const own = kinds => base.stems.filter(stem => kinds.includes(KIND[stem])).map(stem => base.id + "/" + stem);
-  const borrowedRhythm = SONGS.filter(song => song !== base)
+  const borrowedRhythm = SONGS.filter(song => song !== base && song.bpm === base.bpm)
     .flatMap(song => song.stems.filter(stem => KIND[stem] === "rhythm").map(stem => song.id + "/" + stem));
   const friendIds = MIX_MELODIES ? MAIN_SONGS.filter(song => song !== base).map(song => song.id) : (COMPATIBLE[base.id] || []);
   const friendly = friendIds.flatMap(id => {
@@ -154,7 +157,7 @@ export function mapLayer(layer, fromTake, toTake, taken = new Set()) {
   if (song.id === "nature" && !taken.has(layer)) return layer;
   const friends = MIX_MELODIES ? MAIN_SONGS.map(s => s.id) : (COMPATIBLE[to.id] || []);
   // 다른 곡에서 온 리듬, 새 곡과 화음이 맞는 곡의 악기는 그대로 둔다
-  if (song !== from && (kind === "rhythm" || song === to || friends.includes(song.id)) && !taken.has(layer)) return layer;
+  if (song !== from && ((kind === "rhythm" && song.bpm === to.bpm) || song === to || friends.includes(song.id)) && !taken.has(layer)) return layer;
   const options = [
     to.stems.filter(s => s === stem),
     to.stems.filter(s => KIND[s] === kind),
@@ -187,10 +190,11 @@ function mixBus(context, level = MASTER) {
 }
 
 const buffers = new Map();
-async function loadStem(context, layer) {
-  const key = layer.replace(/~e$/, "");
+async function loadStem(context, layer, bpm = BPM) {
+  const stem = layer.replace(/~e$/, "");
+  const key = stem + "@" + bpm;
   if (!buffers.has(key)) {
-    buffers.set(key, fetch(stemUrl(key))
+    buffers.set(key, fetch(stemUrl(stem, bpm))
       .then(response => { if (!response.ok) throw new Error("Audio " + response.status); return response.arrayBuffer(); })
       .then(data => context.decodeAudioData(data))
       .catch(error => { buffers.delete(key); throw error; }));
@@ -210,6 +214,8 @@ function voice(context, output, buffer, layer, base, when, offset) {
   filter.Q.value = .7;
   const gain = context.createGain();
   gain.gain.value = 0;
+  const baseSong = SONGS.find(song => song.id === base);
+  const beat = 60 / (baseSong?.bpm || BPM);
   const borrowed = song.id !== base;
   // 악기마다 고르게 맞춘 음량 (곡 믹스 비율 대신 각 악기가 들리도록)
   let level = .8 * (STEM_GAIN[layer.replace(/~e$/, "")] ?? 1) * (borrowed ? .85 : 1);
@@ -222,7 +228,7 @@ function voice(context, output, buffer, layer, base, when, offset) {
     high.type = "highpass";
     high.frequency.value = 600;
     const delay = context.createDelay(1);
-    delay.delayTime.value = BEAT * .75;
+    delay.delayTime.value = beat * .75;
     const feedback = context.createGain();
     feedback.gain.value = .38;
     const pan = context.createStereoPanner ? context.createStereoPanner() : context.createGain();
@@ -234,12 +240,15 @@ function voice(context, output, buffer, layer, base, when, offset) {
     level *= ECHO_LEVEL;
   }
   last.connect(gain).connect(output);
-  source.start(when, song.id === "nature" ? 0 : offset % buffer.duration);
+  const loopSeconds = Math.min(buffer.duration, song.id === "nature" ? 32 * beat : (song.seconds || buffer.duration));
+  source.loopEnd = loopSeconds;
+  source.start(when, song.id === "nature" ? 0 : offset % loopSeconds);
   const kind = layer.endsWith("~e") ? "echo" : KIND[layer.split("/")[1]];
   return { source, filter, gain, level, layer, kind, born: when, weight: 1 };
 }
 
-function balanceVoices(voices, at, fresh = null) {
+function balanceVoices(voices, at, fresh = null, beat = BEAT) {
+  const BEAT = beat, BAR = beat * 4;
     const pitched = [...voices.values()]
       .filter(v => v.kind === "harmony" || v.kind === "lead" || v.kind === "echo")
       .sort((a, b) => b.born - a.born);
@@ -291,6 +300,9 @@ export class UniverseAudio {
   }
 
   get base() { return MAIN_SONGS[songIndex(this.take)].id; }
+  get bpm() { return MAIN_SONGS[songIndex(this.take)].bpm || BPM; }
+  get beatLength() { return 60 / this.bpm; }
+  get barLength() { return this.beatLength * 4; }
 
   async start() {
     if (!this.context) this.initialize();
@@ -313,22 +325,22 @@ export class UniverseAudio {
   prefetch(take) {
     const base = MAIN_SONGS[songIndex(take)];
     const list = [...base.stems.map(stem => base.id + "/" + stem)];
-    for (const song of SONGS) if (song !== base) for (const stem of song.stems) if (KIND[stem] === "rhythm") list.push(song.id + "/" + stem);
+    for (const song of SONGS) if (song !== base && song.bpm === base.bpm) for (const stem of song.stems) if (KIND[stem] === "rhythm") list.push(song.id + "/" + stem);
     const friends = MIX_MELODIES ? MAIN_SONGS.filter(s => s !== base).map(s => s.id) : (COMPATIBLE[base.id] || []);
     for (const id of friends) for (const stem of SONGS.find(s => s.id === id).stems) list.push(id + "/" + stem);
-    for (const layer of list) loadStem(this.context, layer).catch(() => {});
+    for (const layer of list) loadStem(this.context, layer, base.bpm).catch(() => {});
   }
 
   position(at) { return this.origin === null ? 0 : at - this.origin; }
 
   nextBeatTime(at = this.context.currentTime) {
     if (this.origin === null) return at;
-    return this.origin + Math.ceil((at - this.origin + .02) / BEAT) * BEAT;
+    return this.origin + Math.ceil((at - this.origin + .02) / this.beatLength) * this.beatLength;
   }
 
   beat() {
     if (this.origin === null || !this.context) return null;
-    const beats = Math.max(0, (this.context.currentTime - this.origin) / BEAT);
+    const beats = Math.max(0, (this.context.currentTime - this.origin) / this.beatLength);
     return { bar: Math.floor(beats / 4), beat: Math.floor(beats % 4), phase: beats % 1 };
   }
 
@@ -344,6 +356,10 @@ export class UniverseAudio {
     if (this.anchor === null) {
       // 바탕을 놓아준 뒤 새로 낚으면 바탕 곡 자체가 바뀐다
       if (this.vacant && !this.fixedTake) switched = this.switchSong(item);
+      else if (!this.fixedTake && this.items.size === 0) {
+        this.take = nextArrangement(lastSong(), item);
+        this.prefetch(this.take);
+      }
       this.anchor = item.id;
       this.vacant = false;
       item.anchor = true;
@@ -369,14 +385,15 @@ export class UniverseAudio {
 
   startVoice(item, layer, at = null) {
     const context = this.context;
-    void loadStem(context, layer).then(buffer => {
-      if (item.layer !== layer || !this.items.has(item.id) || this.voices.has(item.id) || this.closed) return;
+    const bpm = this.bpm;
+    void loadStem(context, layer, bpm).then(buffer => {
+      if (bpm !== this.bpm || item.layer !== layer || !this.items.has(item.id) || this.voices.has(item.id) || this.closed) return;
       const requested = Math.max(context.currentTime + .03, at ?? 0);
       const now = layer.startsWith("nature/") ? this.nextBeatTime(requested) : requested;
       if (this.origin === null) this.origin = now;
       if (!this.fixedTake) recordPlayedSong(this.take);
       const v = voice(context, this.bus.input, buffer, layer, this.base, now, this.position(now));
-      const arrive = at ? now + BEAT : Math.max(now + .35, this.nextBeatTime(now + .2));
+      const arrive = at ? now + this.beatLength : Math.max(now + .35, this.nextBeatTime(now + .2));
       v.filter.frequency.setValueAtTime(700, now);
       v.filter.frequency.exponentialRampToValueAtTime(20000, arrive);
       v.gain.gain.setValueAtTime(0, now);
@@ -389,25 +406,24 @@ export class UniverseAudio {
   // 새로 들어온 악기가 들리게: 두 마디 동안 앞으로 나오고,
   // 선율·화음 악기는 최근 두 줄만 또렷하게, 오래된 것은 뒤로 물러난다 (리듬·베이스는 그대로).
   rebalance(at, fresh = null) {
-    balanceVoices(this.voices, at, fresh);
+    balanceVoices(this.voices, at, fresh, this.beatLength);
   }
 
   // 바탕 곡을 다른 곡으로 바꾸고, 남은 악기를 새 곡의 악기로 다음 마디에 갈아 끼운다
   switchSong(item) {
     const from = this.take;
-    this.take = nextArrangement(this.take);
+    this.take = nextArrangement(this.take, item);
     if (this.take === from) this.take = from % MAIN_SONGS.length + 1;
     this.rejected.clear();
     this.prefetch(this.take);
     this.heard = [];
     const now = this.context.currentTime;
-    const bar = this.origin === null ? now + .3 : this.origin + Math.ceil((now - this.origin + .3) / BAR) * BAR;
+    const bar = this.origin === null ? now + .3 : this.origin + Math.ceil((now - this.origin + .3) / this.barLength) * this.barLength;
     // 다른 곡에서 온 악기는 그대로 두고(먼저 자리 확보), 이전 바탕 곡의 악기만 새 곡으로 옮긴다
     const fromId = MAIN_SONGS[songIndex(from)].id;
     const others = [...this.items].filter(([, other]) => other !== item);
     const toId = MAIN_SONGS[songIndex(this.take)].id;
-    const stays = layer => layer.startsWith("nature/") || !layer.startsWith(fromId + "/") && (KIND[stemOf(layer)] === "rhythm" || layer.startsWith(toId + "/")
-      || (MIX_MELODIES || (COMPATIBLE[toId] || []).includes(layer.split("/")[0])));
+    const stays = layer => !layer.startsWith(fromId + "/") && !layer.startsWith("nature/") && compatibleLayer(layer, this.take);
     const taken = new Set(others.filter(([, o]) => stays(o.layer)).map(([, o]) => o.layer));
     const moved = [];
     for (const [id, other] of others) {
@@ -417,7 +433,7 @@ export class UniverseAudio {
     }
     this.active = moved.map(([, , next]) => next);
     for (const [id, other, next] of moved) {
-      if (next === other.layer) { this.heard.push(next); continue; }
+      if (next === other.layer && !next.startsWith("nature/")) { this.heard.push(next); continue; }
       const old = this.voices.get(id);
       if (old) {
         // 이전 곡의 악기는 다음 마디 직전에 필터가 닫히며 빠진다
@@ -425,7 +441,7 @@ export class UniverseAudio {
         old.filter.frequency.setValueAtTime(old.filter.frequency.value, now);
         old.filter.frequency.exponentialRampToValueAtTime(400, bar);
         old.gain.gain.cancelScheduledValues(now);
-        old.gain.gain.setValueAtTime(old.gain.gain.value, Math.max(now, bar - BEAT));
+        old.gain.gain.setValueAtTime(old.gain.gain.value, Math.max(now, bar - this.beatLength));
         old.gain.gain.linearRampToValueAtTime(0, bar + .05);
         old.source.stop(bar + .1);
         this.voices.delete(id);
@@ -456,7 +472,7 @@ export class UniverseAudio {
     this.voices.delete(item.id);
     if (!v || !this.context) return;
     const now = this.context.currentTime;
-    const end = now + BAR;
+    const end = now + this.barLength;
     v.filter.frequency.cancelScheduledValues(now);
     v.filter.frequency.setValueAtTime(v.filter.frequency.value, now);
     v.filter.frequency.exponentialRampToValueAtTime(260, end);
@@ -465,7 +481,7 @@ export class UniverseAudio {
     v.gain.gain.linearRampToValueAtTime(0, end);
     v.source.stop(end + .05);
     // 물러나 있던 선율이 다시 앞으로
-    this.rebalance(now + BEAT);
+    this.rebalance(now + this.beatLength);
   }
 
   clear() {
@@ -518,27 +534,27 @@ export class UniverseAudio {
       active.push(item.layer);
     }
     const rate = 48000;
-    const enter = 2 * BAR;
-    const seconds = ordered.length * enter + 12 * BAR + 2 * BAR;
+    const enter = 2 * this.barLength;
+    const seconds = ordered.length * enter + 12 * this.barLength + 2 * this.barLength;
     const Offline = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
     const decoder = new Offline(2, rate, rate);
     const context = new Offline(2, Math.round(rate * seconds), rate);
     const bus = mixBus(context, .76);
     bus.output.connect(context.destination);
-    const loaded = await Promise.all(ordered.map(item => loadStem(decoder, item.layer).catch(() => null)));
+    const loaded = await Promise.all(ordered.map(item => loadStem(decoder, item.layer, this.bpm).catch(() => null)));
     const renderedVoices = new Map();
     ordered.forEach((item, i) => {
       if (!loaded[i]) return;
       const at = i * enter;
       const v = voice(context, bus.input, loaded[i], item.layer, this.base, at, at);
       v.filter.frequency.setValueAtTime(700, at);
-      v.filter.frequency.exponentialRampToValueAtTime(20000, at + BEAT);
+      v.filter.frequency.exponentialRampToValueAtTime(20000, at + this.beatLength);
       v.gain.gain.setValueAtTime(0, at);
-      v.gain.gain.linearRampToValueAtTime(v.level, at + BEAT);
+      v.gain.gain.linearRampToValueAtTime(v.level, at + this.beatLength);
       renderedVoices.set(item.id ?? i, v);
-      balanceVoices(renderedVoices, at + BEAT, v);
+      balanceVoices(renderedVoices, at + this.beatLength, v, this.beatLength);
     });
-    bus.output.gain.setValueAtTime(.76, seconds - 2 * BAR);
+    bus.output.gain.setValueAtTime(.76, seconds - 2 * this.barLength);
     bus.output.gain.linearRampToValueAtTime(0, seconds);
     return toWav(await context.startRendering());
   }

@@ -1,7 +1,7 @@
-// 영감의 우주 음악 재료: Suno로 만든 열 곡을 악기별(스템)로 나눈 것. 모두 150 BPM.
+// 영감의 우주 음악 재료: Suno로 만든 열 곡을 악기별(스템)로 나눈 것. 원본 곡별 BPM을 사용한다.
 // 곡마다 악기가 꽉 찬 16마디 구간을 최대 세 군데 골라 이어 붙였다 (곡이 진행되며 구간이 바뀐다).
-// 2번(149)과 3번(74×2)은 음 높이를 유지한 채 150으로 늘렸다. 4번은 원래 16마디 루프다.
-// x1~x4는 기존 150 BPM 준비본의 8마디(12.8초) 악기 루프를 사용한다.
+// s2(149), s3(74), x4(73)는 음높이를 보존하는 공통 구간 WSOLA로 원래 템포에 맞춰 복원했다.
+// 75 BPM은 기존 150 BPM의 두 배 박자 해석을 원래 박자로 되돌린다. 자연음은 BPM별 리듬 파일을 사용한다.
 export const BPM = 150;
 
 export const SONGS = [
@@ -22,28 +22,32 @@ export const SONGS = [
       "Synth",
       "Choir",
       "Other"
-    ]
+    ],
+    "bpm": 75
   },
   {
     "id": "s2",
     "title": "여름 바닷가 오케스트라",
     "key": "E♭ major",
     "mood": "sea",
-    "seconds": 76.8,
+    "seconds": 77.31541666666666,
     "stems": [
       "Bass",
       "Percussion",
       "Strings",
       "Brass",
       "Woodwinds"
-    ]
+    ],
+    "format": "m4a",
+    "folder": "s2/original-tempo",
+    "bpm": 149
   },
   {
     "id": "s3",
     "title": "물속의 꿈",
     "key": "C major",
     "mood": "dream",
-    "seconds": 76.8,
+    "seconds": 77.83783333333334,
     "stems": [
       "Drums",
       "Bass",
@@ -51,7 +55,10 @@ export const SONGS = [
       "Keyboard",
       "Guitar",
       "Synth"
-    ]
+    ],
+    "format": "m4a",
+    "folder": "s3/original-tempo",
+    "bpm": 74
   },
   {
     "id": "s4",
@@ -64,7 +71,8 @@ export const SONGS = [
       "Bass",
       "Keyboard",
       "Synth"
-    ]
+    ],
+    "bpm": 150
   },
   {
     "id": "s5",
@@ -82,7 +90,8 @@ export const SONGS = [
       "Brass",
       "Woodwinds",
       "Synth"
-    ]
+    ],
+    "bpm": 150
   },
   {
     "id": "s10",
@@ -97,7 +106,8 @@ export const SONGS = [
       "Keyboard",
       "Guitar",
       "Synth"
-    ]
+    ],
+    "bpm": 150
   },
   {
     "id": "x1",
@@ -111,7 +121,8 @@ export const SONGS = [
       "Keyboard",
       "Percussion",
       "Synth"
-    ]
+    ],
+    "bpm": 150
   },
   {
     "id": "x2",
@@ -125,7 +136,8 @@ export const SONGS = [
       "Keyboard",
       "Percussion",
       "Synth"
-    ]
+    ],
+    "bpm": 75
   },
   {
     "id": "x3",
@@ -138,28 +150,32 @@ export const SONGS = [
       "Drums",
       "Percussion",
       "Synth"
-    ]
+    ],
+    "bpm": 75
   },
   {
     "id": "x4",
     "title": "손끝의 리듬",
     "mood": "love",
-    "seconds": 12.8,
-    "format": "wav",
+    "seconds": 13.150666666666666,
+    "format": "m4a",
     "stems": [
       "Guitar",
       "Keyboard",
       "Synth"
-    ]
+    ],
+    "folder": "x4/original-tempo",
+    "bpm": 73
   }
 ];
 
 // 원본 10곡 모두 바탕 곡 후보로 사용한다.
 // 현장음은 영감에 직접 연결하며 바탕 곡 순환에는 포함하지 않는다.
 SONGS.push({ id: "nature", title: "자연의 소리", extra: true, format: "wav", seconds: 12.8,
-  stems: ["Cat", "Dog", "Crow", "Parrot", "Rain"] });
+  stems: ["Cat", "Dog", "Crow", "Parrot", "Rain", "Thunder"] });
 export const MAIN_SONGS = SONGS.filter(song => !song.extra);
 export const NATURAL_SOUNDS = {
+  "주름진 번개": "nature/Thunder",
   "신호를 먹는 고양이": "nature/Cat",
   "자석을 문 강아지": "nature/Dog",
   "전파를 줍는 까마귀": "nature/Crow",
@@ -179,6 +195,7 @@ export const MIX_MELODIES = false;
 export const COMPATIBLE = { s5: ["s10"], s10: ["s5"] };
 
 export const INSTRUMENTS = {
+  Thunder: "천둥과 낮은 울림",
   Cat: "고양이 울음 리듬", Dog: "강아지 울음 리듬", Crow: "까마귀 울음 리듬", Parrot: "앵무새 울음 리듬", Rain: "양철 지붕 빗소리",
   Drums: "드럼", Bass: "베이스", Percussion: "퍼커션", Keyboard: "건반", Guitar: "기타",
   Strings: "현악", Brass: "금관", Woodwinds: "목관", Synth: "신스", Choir: "코러스", Other: "사운드",
@@ -186,6 +203,7 @@ export const INSTRUMENTS = {
 
 // 악기 성격: 리듬(음 높이 없음), 낮은 소리, 화음, 선율
 export const KIND = {
+  Thunder: "nature",
   Cat: "nature", Dog: "nature", Crow: "nature", Parrot: "nature", Rain: "nature",
   Drums: "rhythm", Percussion: "rhythm", Bass: "low",
   Keyboard: "harmony", Strings: "harmony", Synth: "harmony", Guitar: "harmony", Other: "harmony",
@@ -197,7 +215,9 @@ export const KIND = {
 const originalLayers = ["s1/Drums", "s1/Bass", "s1/Percussion", "s1/Guitar", "s1/Strings", "s1/Brass", "s1/Woodwinds", "s1/Synth", "s1/Choir", "s1/Other", "s2/Bass", "s2/Percussion", "s2/Strings", "s2/Brass", "s2/Woodwinds", "s3/Drums", "s3/Bass", "s3/Percussion", "s3/Keyboard", "s3/Guitar", "s3/Synth", "s4/Drums", "s4/Bass", "s4/Keyboard", "s4/Synth", "s5/Drums", "s5/Bass", "s5/Percussion", "s5/Keyboard", "s5/Guitar", "s5/Strings", "s5/Brass", "s5/Woodwinds", "s5/Synth", "s10/Drums", "s10/Bass", "s10/Percussion", "s10/Keyboard", "s10/Guitar", "s10/Synth", "x1/Drums", "x1/Percussion", "x2/Drums", "x2/Percussion", "x3/Drums", "x3/Percussion"];
 export const LAYERS = [...originalLayers, ...SONGS.flatMap(song => song.stems.map(stem => song.id + "/" + stem)).filter(layer => !originalLayers.includes(layer))];
 
-export function stemUrl(layer) {
+export function stemUrl(layer, bpm = BPM) {
   const song = SONGS.find(song => song.id === layer.split("/")[0]);
-  return new URL("./assets/music/" + layer + "." + (song?.format || "m4a"), import.meta.url);
+  const stem = layer.split("/")[1];
+  const folder = song?.id === "nature" ? "nature/" + bpm : (song?.folder || song.id);
+  return new URL("./assets/music/" + folder + "/" + stem + "." + (song?.format || "m4a"), import.meta.url);
 }
