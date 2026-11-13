@@ -6,6 +6,7 @@ import { layerCode } from "./audio-engine.js";
 import { SONGS } from "./music-catalog.js";
 import { RestartGesture } from "./restart-gesture.js";
 import { followHand, netTarget } from "./hand-follow.js";
+import { updateEraserGrip } from "./eraser-input.js";
 
 /* ────────────────────────────────────────────────────────────
    화면 설계 (75인치 16:9 기준, 모든 값은 무대 크기에 대한 비율)
@@ -888,20 +889,18 @@ function moveTracked(tracked, error) {
     } else net.closed = false;
     // 왼손을 펴면 지우개가 나타나 왼손을 따라간다.
     // 왼손을 펴면 지우개가 나타나고, 내 칸에 붙은 채로 주먹을 쥐면 지운다
-    const leftSeen = pose.leftPalm && pose.leftGrip !== null;
-    const open = leftSeen && pose.leftGrip < .4;
-    const fist = leftSeen && pose.leftGrip > .62;
-    eraser.fist = !!(fist && eraser.on);
-    if (open || eraser.fist) {
+    const wasOn = eraser.on;
+    updateEraserGrip(eraser, pose.leftPalm ? pose.leftGrip : null);
+    if (eraser.on) {
       const rx = (pose.leftPalm[0] - pose.leftShoulder[0]) * (4 / 3) / pose.span;
       const ry = (pose.leftPalm[1] - pose.leftShoulder[1]) / pose.span;
       // 그물보다 크게 움직여서, 손을 내리면 아래 수집 칸까지 쉽게 닿게
-      const tx = clamp(actor.tx - .05 + rx * .22, .03, .97);
-      const ty = clamp(.4 + ry * .3, .07, .97);
-      if (!eraser.on) { eraser.x = tx; eraser.y = ty; }
+      const reach = rx * .22 + Math.sign(rx) * Math.max(0, Math.abs(rx) - .55) * .1;
+      const tx = clamp(actor.tx - .05 + reach, .02, .98);
+      const ty = clamp(.4 + ry * .36, .07, .97);
+      if (!wasOn) { eraser.x = tx; eraser.y = ty; }
       eraser.tx = tx; eraser.ty = ty;
     }
-    eraser.on = !!(open || eraser.fist);
   });
   separateActors();
 }
@@ -996,10 +995,10 @@ function erase(player, time, trayCells, bounds) {
       const r = el.getBoundingClientRect();
       const cx = (r.left + r.width / 2 - bounds.left) / bounds.width;
       // 흔드는 동안 옆 칸으로 넘어가지 않게, 붙어 있던 칸은 넉넉히 붙든다
-      const d = Math.abs(cx - eraser.tx) - (i === eraser.slot ? .12 : 0);
+      const d = Math.abs(cx - eraser.tx) - (i === eraser.slot ? .025 : 0);
       if (d < best) { best = d; index = i; }
     });
-    if (best > .2) index = -1;
+    if (best > .08) index = -1;
   }
   if (index >= 0) {
     const r = trayCells[index].getBoundingClientRect();
@@ -1026,6 +1025,7 @@ function erase(player, time, trayCells, bounds) {
   trayCells[index].classList.add("holding");
   if (progress >= 1) {
     release(index, player);
+    eraser.needsOpen = true; eraser.on = false; eraser.fist = false;
     eraser.slot = null; resetWave(eraser); eraser.used += 1;
   }
 }
