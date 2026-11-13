@@ -537,26 +537,46 @@ function nextBeat() {
 }
 
 function drawLayers() {
+  const container = byId("art-layers");
   const items = slotsList.filter(Boolean);
-  byId("art-layers").replaceChildren(...items.map((item, index) => {
+  const active = new Set(items.map(item => String(item.id)));
+  for (const layer of container.children) {
+    if (!active.has(layer.dataset.item)) layer.remove();
+  }
+  for (const item of items) {
+    if (Array.from(container.children).some(layer => layer.dataset.item === String(item.id))) continue;
+    const imagePool = catalog.filter(candidate => candidate.kind === "image" && candidate.role === item.role);
+    const fallback = catalog.filter(candidate => candidate.kind === "image");
+    const pool = imagePool.length ? imagePool : fallback;
+    const source = item.kind === "image" ? item : pool[item.seed % pool.length];
+    if (!source) continue;
     const ghost = document.createElement("span");
-    const angle = index * 2.39996 + item.seed * .07;
-    const radius = .2 + (index % 4) * .045;
-    ghost.className = "art-layer " + item.kind;
+    const angle = item.slot * 2.39996 + item.seed * .07;
+    const radius = .19 + (item.seed % 4) * .045;
+    ghost.className = "art-layer artwork";
+    ghost.dataset.item = String(item.id);
+    ghost.setAttribute("aria-hidden", "true");
     ghost.style.setProperty("--x", (50 + 100 * radius * Math.cos(angle)) + "%");
-    ghost.style.setProperty("--y", (36 + 100 * radius * .56 * Math.sin(angle)) + "%");
+    ghost.style.setProperty("--y", (36 + 100 * radius * .62 * Math.sin(angle)) + "%");
     ghost.style.setProperty("--turn", (item.seed % 9 * 9 - 36) + "deg");
     ghost.style.setProperty("--player", PLAYERS[item.player].color);
-    ghost.style.setProperty("--tint", ROLE_TINT[item.role]);
+    ghost.style.setProperty("--cycle", (16 + item.seed % 9) + "s");
     ghost.style.setProperty("--delay", Math.max(0, item.joinAt - performance.now()) + "ms");
-    if (item.kind === "image") {
-      const image = new Image();
-      image.src = "./assets/" + item.image + ".webp";
-      image.alt = "";
-      ghost.append(image);
-    } else ghost.textContent = item.name;
-    return ghost;
-  }));
+    const mosaic = document.createElement("span");
+    mosaic.className = "art-mosaic";
+    for (let piece = 0; piece < 9; piece++) {
+      const tile = document.createElement("i");
+      const x = piece % 3, y = Math.floor(piece / 3);
+      tile.style.backgroundImage = `url("./assets/${source.image}.webp")`;
+      tile.style.backgroundPosition = `${x * 50}% ${y * 50}%`;
+      tile.style.setProperty("--dx", ((x - 1) * (3 + item.seed % 4)) + "cqw");
+      tile.style.setProperty("--dy", ((y - 1) * (3 + piece % 3)) + "cqw");
+      tile.style.setProperty("--spin", ((piece % 2 ? 1 : -1) * (30 + item.seed % 60)) + "deg");
+      mosaic.append(tile);
+    }
+    ghost.append(mosaic);
+    container.append(ghost);
+  }
 }
 
 function drawTray(fresh = -1) {
